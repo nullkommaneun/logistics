@@ -1,4 +1,4 @@
-const SW_VERSION = 'bn-v1.0.2'; // Version erhöht für Update
+const SW_VERSION = 'bn-v1.0.4'; // ↑ Version-Bump, Cache-Refresh erzwingen
 const CORE = [
   'index.html',
   'css/style.css',
@@ -11,7 +11,7 @@ const CORE = [
   'js/ui.js',
   'js/map.js',
   'js/analytics.js',
-  'js/status.js',            // 🔴 neu cachen
+  'js/status.js',          // bleibt im Cache; Datei muss im Repo liegen
   'js/routing/nearest.js',
   'js/routing/dijkstra.js',
   'js/capacity/none.js',

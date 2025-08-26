@@ -1,9 +1,8 @@
 import { bus } from './bus.js';
-import { state, featureFlags, initFromLocalStorage, importContainersCSV, importSitesCSV, importSettingsJSON, exportAllJSON } from './data.js';
+import { state, featureFlags, importContainersCSV, importSitesCSV, importSettingsJSON, exportAllJSON } from './data.js';
 import { searchContainers } from './search.js';
 import { addToCart, removeFromCart, clearCart, getCartItems, getUniqueSiteIds } from './cart.js';
 import { computeKPIs, logTour } from './analytics.js';
-import { initStatus } from './status.js';
 
 let els = {};
 let routeCache = null;
@@ -19,7 +18,8 @@ function distMetersFromStart(site){
   return px/ppm;
 }
 
-export function initUI(){
+// ⚠️ neu: initUI ist async, lädt status.js dynamisch und fällt notfalls auf No-Op zurück
+export async function initUI(){
   els = {
     searchInput: document.getElementById('searchInput'),
     addBtn: document.getElementById('addBtn'),
@@ -45,7 +45,11 @@ export function initUI(){
     statusArea: document.getElementById('statusArea')
   };
 
-  initStatus(els.statusArea);
+  // Status-Engine optional laden – wenn fehlend, kein Absturz
+  let initStatus = (_el)=>{};
+  try { ({ initStatus } = await import('./status.js')); } 
+  catch (e) { console.warn('status.js nicht geladen – fahre ohne Klartext-Status fort.', e); }
+  try { initStatus(els.statusArea); } catch(e){ console.warn('Status-Init schlug fehl', e); }
 
   els.searchInput.addEventListener('input', onSearchInput);
   els.searchInput.addEventListener('keydown', (e)=>{ if (e.key === 'Enter'){ tryAddTopOrExact(); } });
@@ -59,6 +63,7 @@ export function initUI(){
 
   els.exportTourBtn.addEventListener('click', exportTour);
 
+  // Importe robust mit Dateicheck
   els.fileContainers.addEventListener('change', async (e)=>{
     const f = e.target.files && e.target.files[0]; if (!f) return;
     const txt = await f.text();
@@ -108,8 +113,7 @@ function onSearchInput(){
   renderAutocomplete(res);
 }
 function renderAutocomplete(list){
-  const ac = els.acList;
-  ac.innerHTML = '';
+  const ac = els.acList; ac.innerHTML = '';
   list.forEach((c,i)=>{
     const div = document.createElement('div');
     div.setAttribute('role','option');
@@ -121,8 +125,7 @@ function renderAutocomplete(list){
   });
 }
 function tryAddTopOrExact(){
-  const term = els.searchInput.value.trim();
-  if (!term) return;
+  const term = els.searchInput.value.trim(); if (!term) return;
   const res = searchContainers(term, 20);
   const exact = res.find(c=>String(c.nr)===term);
   if (exact){ addToCart(exact.nr); snack('Hinzugefügt: '+exact.nr); }
@@ -131,7 +134,6 @@ function tryAddTopOrExact(){
   els.searchInput.select(); els.searchInput.focus();
 }
 
-// ---- Cart-Rendering (mit gewähltem Standort je Item) ----
 function renderCart(){
   const items = getCartItems();
   els.cartList.innerHTML = '';
@@ -149,9 +151,7 @@ function renderCart(){
         <div><strong>${c.nr}</strong> <span class="badge">${c.farbe||'–'}</span> ${c.flags?'<span class="badge">'+c.flags+'</span>':''}</div>
         <div class="meta">Ort ${it.entry.siteId??'–'}${alt} · Klasse ${c.klasse||'–'} · ${c.stapelbar==='true'?'stapelbar':'nicht stapelbar'} · ${(c.gewicht_kg||'–')} kg · <strong>${dmTxt}</strong> · ETA ${eta}</div>
       </div>
-      <div>
-        <button class="btn remove">Entfernen</button>
-      </div>
+      <div><button class="btn remove">Entfernen</button></div>
     `;
     els.cartList.appendChild(li);
   }
@@ -160,9 +160,7 @@ function renderCart(){
 async function recomputeRoute(){
   const uniqueSiteIds = getUniqueSiteIds();
   if (!state.start || uniqueSiteIds.length===0){
-    routeCache = null;
-    renderSteps(); renderKPIs();
-    return;
+    routeCache = null; renderSteps(); renderKPIs(); return;
   }
   const start = { x: state.start.x, y: state.start.y, label: state.start.label };
   let computeRoute;
@@ -173,7 +171,7 @@ async function recomputeRoute(){
   }
   const route = computeRoute(start, state.sites, uniqueSiteIds);
   routeCache = route;
-  bus.emit('routing:draw', { route });
+  (await import('./bus.js')).bus.emit('routing:draw', { route });
   renderSteps(); renderKPIs();
 }
 

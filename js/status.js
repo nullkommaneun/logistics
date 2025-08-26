@@ -31,7 +31,7 @@ function evaluate(){
   if (volatileMsg && volatileMsg.text) { msgs.push({type:'error', text: volatileMsg.text}); }
 
   if (!state.mapImage){
-    msgs.push({type:'error', text:'Noch kein Werksplan geladen. Tippe **„Plan laden“** und wähle ein Bild (PNG/JPG).'});
+    msgs.push({type:'error', text:'Noch kein Werksplanbild geladen. **Optional:** Tippe „Plan laden“, um eine Grafik zu hinterlegen. Für die Wegberechnung reicht das **Raster** mit Wänden/Toren.'});
   }
   if (!state.settings?.px_per_meter){
     msgs.push({type:'error', text:'Kalibrierung fehlt. Tippe **„Kalibrieren“**, markiere **zwei Punkte** und gib die Distanz in **Metern** ein.'});
@@ -44,21 +44,6 @@ function evaluate(){
   }
   if (!state.containers?.length){
     msgs.push({type:'error', text:'Es sind noch **keine Behälterdaten** geladen. Lade die Container‑CSV unter **Daten → CSV Container**.'});
-  }
-
-  // Container, die auf nicht vorhandene Standort-IDs verweisen
-  if (state.sites?.length && state.containers?.length){
-    const known = new Set(state.sites.map(s=>Number(s.id)));
-    let invalid = 0;
-    for (const c of state.containers){
-      const ids = c.standorte?.length ? c.standorte : (Number.isFinite(c.standort)? [c.standort] : []);
-      if (!ids.length) continue;
-      const ok = ids.some(id => known.has(Number(id)));
-      if (!ok) invalid++;
-    }
-    if (invalid>0){
-      msgs.push({type:'error', text:`In der Containerliste verweisen **${invalid} Einträge** auf nicht vorhandene Standort‑IDs. Bitte IDs prüfen oder die passenden Standorte auf dem Plan setzen.`});
-    }
   }
 
   // Import-Warnungen (Container)

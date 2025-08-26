@@ -23,7 +23,7 @@ async function bootstrap(){
     const canvas = document.getElementById('mapCanvas');
     mapMod.initMap(canvas);
 
-    // Plan laden
+    // Plan laden (optional)
     const planInput = document.getElementById('planFile');
     if (planInput){
       planInput.addEventListener('change', (e)=>{
@@ -32,9 +32,11 @@ async function bootstrap(){
       });
     }
 
-    // Kalibrieren / Standort / Start
+    // Aktionen
     document.getElementById('btnCalibrate').addEventListener('click', ()=>mapMod.setModeCalibrate());
     document.getElementById('btnAddSite').addEventListener('click', ()=>mapMod.setModeAddSite());
+    document.getElementById('btnWalls').addEventListener('click', ()=>mapMod.setModeWalls());
+    document.getElementById('btnDoor').addEventListener('click', ()=>mapMod.setModeDoor());
     document.getElementById('btnSetStart').addEventListener('click', ()=>mapMod.setModeStart());
 
     if (!dataMod.state.start && dataMod.state.sites.length){

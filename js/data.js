@@ -2,8 +2,7 @@ import { bus } from './bus.js';
 
 export const LS_KEYS = {
   containers: 'bn_containers_csv',
-  sites: 'bn_sites',             // JSON-basiert
-  sites_csv_legacy: 'bn_sites_csv', // zur Migration (falls vorhanden)
+  sites: 'bn_sites',
   settings: 'bn_settings_json',
   mapImage: 'bn_map_image',
   start: 'bn_start',
@@ -19,9 +18,9 @@ export const defaults = {
     px_per_meter: null,
     speed_kmh_default: 7,
     hallen: {},
-    featureFlags: { routing:'nearest', capacity:'none', uiDensity:'comfort' }
+    featureFlags: { routing:'dijkstra', capacity:'none', uiDensity:'comfort' }  // dijkstra ist Standard
   },
-  featureFlags: { routing:'nearest', capacity:'none', uiDensity:'comfort' }
+  featureFlags: { routing:'dijkstra', capacity:'none', uiDensity:'comfort' }
 };
 
 export const state = {
@@ -45,7 +44,6 @@ export function initFromLocalStorage(){
   try{
     const c = localStorage.getItem(LS_KEYS.containers);
     const s = localStorage.getItem(LS_KEYS.sites);
-    const sLegacy = localStorage.getItem(LS_KEYS.sites_csv_legacy);
     const j = localStorage.getItem(LS_KEYS.settings);
     const m = localStorage.getItem(LS_KEYS.mapImage);
     const st = localStorage.getItem(LS_KEYS.start);
@@ -53,12 +51,6 @@ export function initFromLocalStorage(){
 
     if (c) state.containers = parseContainersCSV(c).rows;
     if (s){ state.sites = JSON.parse(s)||[]; }
-    else if (sLegacy){ // sanfte Migration
-      const {rows} = parseSitesCSV(sLegacy);
-      state.sites = rows||[];
-      localStorage.setItem(LS_KEYS.sites, JSON.stringify(state.sites));
-      localStorage.removeItem(LS_KEYS.sites_csv_legacy);
-    }
     if (j){ state.settings = migrateSettings(JSON.parse(j)); if (state.settings.featureFlags) featureFlags = state.settings.featureFlags; }
     if (m) state.mapImage = m;
     if (st) state.start = JSON.parse(st);
@@ -67,9 +59,6 @@ export function initFromLocalStorage(){
 }
 
 export function resetAll(){ Object.values(LS_KEYS).forEach(k => localStorage.removeItem(k)); }
-export function getLocalStorageSummary(){
-  const out = {}; for (let i=0;i<localStorage.length;i++){ const k = localStorage.key(i); out[k] = (localStorage.getItem(k)||'').length + ' bytes'; } return out;
-}
 export function dumpState(){
   return { containers: state.containers.slice(0,5).concat(state.containers.length>5?['…']:[]),
            sites: state.sites.slice(0,5).concat(state.sites.length>5?['…']:[]),
@@ -145,25 +134,9 @@ export function parseContainersCSV(text){
   return { headers, rows, warnings };
 }
 
-/* ---------- Sites (JSON) & Migration ---------- */
-function parseSitesCSV(text){ // nur für Migration
-  const delim = detectDelimiter(text);
-  const lines = text.trim().split(/\r?\n/).filter(l=>l.trim().length>0);
-  if (!lines.length) return { headers:[], rows:[] };
-  const headers = splitSmart(lines.shift(), delim);
-  const rows = [];
-  for (const line of lines){
-    const p = splitSmart(line, delim);
-    const rec = {}; headers.forEach((h,i)=>rec[h]=p[i]);
-    rows.push({ id:Number(rec.id), x:Number(rec.x), y:Number(rec.y), halle:rec.halle||'' });
-  }
-  return { headers, rows };
-}
-
+/* ---------- Sites JSON ---------- */
 function saveSites(){ localStorage.setItem(LS_KEYS.sites, JSON.stringify(state.sites)); }
-
 export function upsertSite(site){
-  // site: {id:number, x:number, y:number, halle?:string}
   const id = Number(site.id);
   if (!Number.isFinite(id)) return;
   const idx = state.sites.findIndex(s=>Number(s.id)===id);
@@ -172,14 +145,12 @@ export function upsertSite(site){
   saveSites();
   bus.emit('sites:updated', { count: state.sites.length });
 }
-
 export function removeSite(id){
   const n = Number(id);
   const before = state.sites.length;
   state.sites = state.sites.filter(s=>Number(s.id)!==n);
   if (state.sites.length !== before){ saveSites(); bus.emit('sites:updated', { count: state.sites.length }); }
 }
-
 export function importSitesJSON(text){
   let arr;
   try{
@@ -197,7 +168,6 @@ export function importSitesJSON(text){
   bus.emit('sites:updated', { count: state.sites.length });
   return [];
 }
-
 export function exportSitesJSON(){
   return new Blob([JSON.stringify(state.sites, null, 2)], {type:'application/json'});
 }
@@ -210,7 +180,6 @@ export function migrateSettings(s){
   if (!out.featureFlags) out.featureFlags = structuredClone(defaults.featureFlags);
   return out;
 }
-
 export function importContainersCSV(text){
   const {rows, warnings} = parseContainersCSV(text);
   state.containers = rows;
@@ -249,7 +218,6 @@ export function setStartPoint(x, y){
   localStorage.setItem(LS_KEYS.start, JSON.stringify(state.start));
   bus.emit('start:changed', { start: state.start });
 }
-
 export function pxToMeters(px){
   const ppm = state.settings.px_per_meter;
   if (!ppm) return null;

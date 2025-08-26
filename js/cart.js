@@ -13,7 +13,7 @@ function chooseSiteIdForContainer(cont){
     .map(id => state.sites.find(s => Number(s.id) === id))
     .filter(Boolean);
 
-  if (!siteObjs.length) return null; // ⚠️ nur Sites mit Koordinate zulassen
+  if (!siteObjs.length) return null;
 
   if (!start) return siteObjs[0].id;
 
@@ -24,7 +24,6 @@ function chooseSiteIdForContainer(cont){
   });
   return siteObjs[0].id;
 }
-
 function persist(){ localStorage.setItem(LS_KEYS.cart, JSON.stringify(state.cart)); }
 
 function normalizeCart(){
@@ -40,7 +39,6 @@ function normalizeCart(){
   });
   if (changed) persist();
 }
-
 function reassignSites(){
   let changed = false;
   state.cart = state.cart.map(entry=>{
@@ -52,7 +50,6 @@ function reassignSites(){
   });
   if (changed){ persist(); bus.emit('cart:changed', {}); }
 }
-
 bus.on('start:changed', reassignSites);
 bus.on('sites:updated', reassignSites);
 bus.on('containers:updated', ()=>{ normalizeCart(); reassignSites(); });
@@ -68,16 +65,13 @@ export function addToCart(nr){
   bus.emit('cart:add', {nr, siteId});
   bus.emit('cart:changed', {});
 }
-
 export function removeFromCart(nr){
   const idx = state.cart.findIndex(e => (typeof e==='string' ? e===nr : e.nr===nr));
   if (idx>=0){ state.cart.splice(idx,1); persist(); bus.emit('cart:remove',{nr}); bus.emit('cart:changed',{}); }
 }
-
 export function clearCart(){
   state.cart = []; persist(); bus.emit('cart:clear',{}); bus.emit('cart:changed',{});
 }
-
 export function getCartItems(){
   normalizeCart();
   return state.cart.map(entry=>{
@@ -86,7 +80,6 @@ export function getCartItems(){
     return cont ? { entry: { nr: cont.nr, siteId }, container: cont } : null;
   }).filter(Boolean);
 }
-
 export function getUniqueSiteIds(){
   const items = getCartItems();
   const set = new Set();

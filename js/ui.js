@@ -3,6 +3,7 @@ import { state, featureFlags, importContainersCSV, importSettingsJSON, exportAll
 import { searchContainers } from './search.js';
 import { addToCart, removeFromCart, clearCart, getCartItems, getUniqueSiteIds } from './cart.js';
 import { computeKPIs } from './analytics.js';
+import { importNavJSON, exportNavJSON } from './navgrid.js';
 
 let els = {};
 let routeCache = null;
@@ -32,6 +33,8 @@ export async function initUI(){
     etaTotal: document.getElementById('etaTotal'),
     fileContainers: document.getElementById('fileContainers'),
     fileSitesJson: document.getElementById('fileSitesJson'),
+    filePlanJson: document.getElementById('filePlanJson'),
+    exportPlanBtn: document.getElementById('exportPlanBtn'),
     fileSettings: document.getElementById('fileSettings'),
     exportSitesBtn: document.getElementById('exportSitesBtn'),
     exportAllBtn: document.getElementById('exportAllBtn'),
@@ -45,7 +48,6 @@ export async function initUI(){
     statusArea: document.getElementById('statusArea')
   };
 
-  // Klartext-Status optional laden
   try { (await import('./status.js')).initStatus(els.statusArea); }
   catch (e) { console.warn('status.js fehlt – weiter ohne Klartext-Status.', e); }
 
@@ -73,6 +75,16 @@ export async function initUI(){
     const txt = await f.text();
     importSitesJSON(txt);
     snack('Standorte geladen'); refreshSummaries(); recomputeRoute();
+  });
+  els.filePlanJson.addEventListener('change', async (e)=>{
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    const txt = await f.text();
+    importNavJSON(txt);
+    snack('Werksplan (Wände/Tore) geladen'); recomputeRoute();
+  });
+  els.exportPlanBtn.addEventListener('click', ()=>{
+    const blob = exportNavJSON(); const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'bn-werksplan.json'; a.click(); URL.revokeObjectURL(url);
   });
   els.exportSitesBtn.addEventListener('click', ()=>{
     const blob = exportSitesJSON(); const url = URL.createObjectURL(blob);
@@ -165,9 +177,9 @@ async function recomputeRoute(){
   const start = { x: state.start.x, y: state.start.y, label: state.start.label };
   let computeRoute;
   if (featureFlags.routing === 'nearest'){
-    ({ computeRoute } = await import('./routing/nearest.js'));
+    ({ computeRoute } = await import('./routing/nearest.js')); // Luftlinie (Fallback)
   } else {
-    ({ computeRoute } = await import('./routing/dijkstra.js'));
+    ({ computeRoute } = await import('./routing/dijkstra.js')); // echtes Wege-Routing
   }
   const route = computeRoute(start, state.sites, uniqueSiteIds);
   routeCache = route;
@@ -182,7 +194,7 @@ function renderSteps(){
     const m = s.dist_m!=null ? Math.round(s.dist_m) + ' m' : Math.round(s.dist_px) + ' px';
     return `→ Ort ${s.to} · ${m}`;
   });
-  el.textContent = parts.length ? parts.join('  ') : 'Route (Stub): Reihenfolge ohne Distanzen';
+  el.textContent = parts.length ? parts.join('  ') : 'Route: –';
   const total_m = routeCache.total_m!=null ? Math.round(routeCache.total_m)+' m' : Math.round(routeCache.totalPx)+' px';
   document.getElementById('distTotal').textContent = 'Distanz: ' + total_m;
   const total_s = routeCache.total_s!=null ? Math.round(routeCache.total_s) + ' s' : '–';
@@ -212,7 +224,6 @@ async function exportTour(){
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = 'bn-tourlogs.csv'; a.click(); URL.revokeObjectURL(url);
 }
-
 function snack(msg){
   const s = document.getElementById('snackbar');
   s.textContent = msg; s.classList.add('show'); setTimeout(()=>s.classList.remove('show'), 1600);

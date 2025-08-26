@@ -42,23 +42,25 @@
       <div id="kpiBar" class="kpis" aria-live="polite"></div>
     </section>
 
-    <section class="panel map-panel" aria-label="Karte & Kalibrierung">
+    <section class="panel map-panel" aria-label="Karte & Wegeplan">
       <div class="panel-header">
         <h2>Karte</h2>
         <div class="actions">
           <label class="btn file">
             Plan laden
-            <input type="file" id="planFile" accept="image/*" class="file-input" aria-label="Werksplan hochladen">
+            <input type="file" id="planFile" accept="image/*" class="file-input" aria-label="Werksplan-Bild (optional)">
           </label>
           <button id="btnCalibrate" class="btn">Kalibrieren</button>
           <button id="btnAddSite" class="btn">Standort+</button>
+          <button id="btnWalls" class="btn">Wände</button>
+          <button id="btnDoor" class="btn">Tor (Öffnung)</button>
           <button id="btnSetStart" class="btn">Startpunkt</button>
         </div>
       </div>
       <div class="canvas-wrap">
         <canvas id="mapCanvas" width="1000" height="700" aria-label="Werksplan"></canvas>
 
-        <!-- Kalibrierungs-Overlay (nach zwei Punkten) -->
+        <!-- Kalibrierungs-Overlay -->
         <div id="calOverlay" class="cal-overlay" hidden>
           <div class="cal-card">
             <div class="cal-title">Kalibrierung</div>
@@ -107,6 +109,11 @@
             <input id="fileSitesJson" class="file-input" type="file" accept=".json,application/json">
           </label>
           <button id="exportSitesBtn" class="btn">Export Standorte</button>
+          <label class="btn file">
+            JSON Werksplan
+            <input id="filePlanJson" class="file-input" type="file" accept=".json,application/json">
+          </label>
+          <button id="exportPlanBtn" class="btn">Export Werksplan</button>
           <label class="btn file">
             JSON Einstellungen
             <input id="fileSettings" class="file-input" type="file" accept=".json,application/json">

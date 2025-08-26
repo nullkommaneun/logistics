@@ -1,4 +1,4 @@
-const SW_VERSION = 'bn-v1.1.0'; // neue Hauptversion (Sites ohne CSV)
+const SW_VERSION = 'bn-v1.2.0'; // neue Version für Wege-Raster & Dijkstra
 
 const CORE = [
   'index.html',
@@ -13,6 +13,7 @@ const CORE = [
   'js/map.js',
   'js/analytics.js',
   'js/status.js',
+  'js/navgrid.js',
   'js/routing/nearest.js',
   'js/routing/dijkstra.js',
   'js/capacity/none.js',
@@ -20,7 +21,6 @@ const CORE = [
   'manifest.webmanifest',
   'assets/icon-192.png',
   'assets/icon-512.png'
-  // bewusst KEIN sample-plan.png und KEIN data/sites.csv mehr
 ];
 
 self.addEventListener('install', (e)=>{

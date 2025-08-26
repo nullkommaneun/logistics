@@ -2,11 +2,12 @@ import { bus } from './bus.js';
 import { state, featureFlags, importContainersCSV, importSitesCSV, importSettingsJSON, exportAllJSON } from './data.js';
 import { searchContainers } from './search.js';
 import { addToCart, removeFromCart, clearCart, getCartItems, getUniqueSiteIds } from './cart.js';
-import { computeKPIs, logTour } from './analytics.js';
+import { computeKPIs } from './analytics.js'; // ⬅️ nur computeKPIs fest importieren
 
 let els = {};
 let routeCache = null;
 
+// Geschwindigkeit [m/s]
 function mPerS(){ const v = state.settings.speed_kmh_default || 7; return (v*1000)/3600; }
 function distMetersFromStart(site){
   if (!state.start || !site) return null;
@@ -18,7 +19,7 @@ function distMetersFromStart(site){
   return px/ppm;
 }
 
-// ⚠️ neu: initUI ist async, lädt status.js dynamisch und fällt notfalls auf No-Op zurück
+// ⚠️ async, damit wir optional status.js nachladen können
 export async function initUI(){
   els = {
     searchInput: document.getElementById('searchInput'),
@@ -45,11 +46,9 @@ export async function initUI(){
     statusArea: document.getElementById('statusArea')
   };
 
-  // Status-Engine optional laden – wenn fehlend, kein Absturz
-  let initStatus = (_el)=>{};
-  try { ({ initStatus } = await import('./status.js')); } 
-  catch (e) { console.warn('status.js nicht geladen – fahre ohne Klartext-Status fort.', e); }
-  try { initStatus(els.statusArea); } catch(e){ console.warn('Status-Init schlug fehl', e); }
+  // Status-Engine optional laden – nie fatal
+  try { (await import('./status.js')).initStatus(els.statusArea); }
+  catch (e) { console.warn('status.js fehlt – weiter ohne Klartext-Status.', e); }
 
   els.searchInput.addEventListener('input', onSearchInput);
   els.searchInput.addEventListener('keydown', (e)=>{ if (e.key === 'Enter'){ tryAddTopOrExact(); } });
@@ -63,7 +62,6 @@ export async function initUI(){
 
   els.exportTourBtn.addEventListener('click', exportTour);
 
-  // Importe robust mit Dateicheck
   els.fileContainers.addEventListener('change', async (e)=>{
     const f = e.target.files && e.target.files[0]; if (!f) return;
     const txt = await f.text();
@@ -199,7 +197,16 @@ function renderKPIs(){
     ['Cluster', (k.cluster*100).toFixed(0)+'%'],
   ];
   els.kpiBar.innerHTML = kpis.map(([n,v])=>`<div class="kpi"><div>${n}</div><div><strong>${v}</strong></div></div>`).join('');
-  if (k.behaelter && k.stops){ logTour(k); }
+
+  // 🔐 Lazy & optional: logTour nur laden, wenn vorhanden – niemals fatal
+  if (k.behaelter && k.stops){
+    (async ()=>{ 
+      try{
+        const mod = await import('./analytics.js');
+        if (typeof mod.logTour === 'function') mod.logTour(k);
+      }catch(e){ /* bewusst ignorieren */ }
+    })();
+  }
 }
 
 async function exportAll(){

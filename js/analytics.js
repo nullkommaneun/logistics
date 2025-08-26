@@ -13,7 +13,7 @@ export function computeKPIs(route, cartItems){
 }
 
 export function logTour(kpis){
-  // kpis stammt aus computeKPIs; erweitern um Zeitstempel
+  // kpis stammt aus computeKPIs; Zeitstempel ergänzen
   appendTourLog({ ts: new Date().toISOString(), ...kpis });
 }
 

@@ -19,11 +19,15 @@
   <main id="main" class="layout">
     <section class="panel search-panel" aria-label="Suche und Eingabe">
       <label for="searchInput" class="visually-hidden">Behälter‑Nr. eingeben (6-stellig)</label>
-      <!-- numerische Eingabe gehärtet -->
+      <!-- numerische Eingabe -->
       <input id="searchInput" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="6"
              autocomplete="off" placeholder="Behälter‑Nr. (6-stellig)" aria-label="Behälternummer"/>
       <button id="addBtn" class="btn primary" aria-label="zur Tour hinzufügen">Hinzufügen</button>
       <div id="acList" class="autocomplete" role="listbox" aria-label="Vorschläge"></div>
+
+      <!-- 🔴 Klartext-Status dort, wo du markiert hast -->
+      <div id="statusArea" class="status-area" aria-live="polite"></div>
+
       <p class="hint">Serieneingabe: <kbd>Enter</kbd> fügt hinzu. <strong>Nicht während der Fahrt bedienen.</strong></p>
     </section>
 
@@ -43,7 +47,6 @@
       <div class="panel-header">
         <h2>Karte</h2>
         <div class="actions">
-          <!-- Sichtbarer Upload-Button: Input nur innerhalb .file absolut -->
           <label class="btn file">
             Plan laden
             <input type="file" id="planFile" accept="image/*" class="file-input" aria-label="Werksplan hochladen">
@@ -56,12 +59,12 @@
       <div class="canvas-wrap">
         <canvas id="mapCanvas" width="1000" height="700" aria-label="Werksplan"></canvas>
 
-        <!-- Nicht-modales Kalibrierungs-Overlay innerhalb der Canvas-Fläche -->
+        <!-- Nicht-modales Meter-Overlay NACH 2 Punkten -->
         <div id="calOverlay" class="cal-overlay" hidden>
           <div class="cal-card">
             <div class="cal-title">Kalibrierung</div>
             <div class="cal-body">
-              <p>Distanz zwischen den zwei Punkten in Metern eingeben:</p>
+              <p>Distanz zwischen den zwei gewählten Punkten in Metern eingeben:</p>
               <input id="calMeters" type="number" min="0" step="0.1" placeholder="Meter" />
             </div>
             <div class="cal-actions">

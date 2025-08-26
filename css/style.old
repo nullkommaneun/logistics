@@ -1,4 +1,3 @@
-
 :root{
   --bg:#0b0f14; --fg:#e6edf3; --muted:#9fb0c0; --acc:#4fb477; --acc2:#7aa2f7;
   --err:#ff6b6b; --surface:#121821; --surface2:#17202b; --divider:#203040;
@@ -22,8 +21,9 @@ body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 system-ui,Segoe
 .btn.secondary{background:#1a2532}
 .btn.danger{background:#382024;border-color:#5a2b2f;color:#ffb4b4}
 .btn:active{transform:translateY(1px)}
-.file{position:relative;overflow:hidden}
-.file-input{position:absolute;inset:0;opacity:0}
+/* Button-Wrapper für File-Inputs – NUR hier absolut positionieren */
+.file{position:relative;overflow:hidden;display:inline-block}
+.file > .file-input{position:absolute;inset:0;opacity:0;cursor:pointer}
 input#searchInput{height:var(--touch);width:100%;border-radius:10px;border:1px solid var(--divider);background:#0e141d;color:var(--fg);padding:0 12px;font-size:18px}
 .search-panel{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
 .autocomplete{grid-column:1 / span 2;border-radius:10px;border:1px solid var(--divider);max-height:220px;overflow:auto;background:#0d131c}
@@ -56,7 +56,7 @@ input#searchInput{height:var(--touch);width:100%;border-radius:10px;border:1px s
 .pf-log{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;white-space:pre-wrap;max-height:40vh;overflow:auto}
 .hr{height:1px;background:#16253a;margin:6px 0}
 
-/* Non-modal calibration overlay inside canvas area */
+/* Non-modale Kalibrierung */
 .cal-overlay{position:absolute;inset:auto 8px 8px auto;z-index:20}
 .cal-card{background:#0b121c;border:1px solid #214366;border-radius:12px;box-shadow:var(--shadow);padding:10px;min-width:260px}
 .cal-title{font-weight:700;margin-bottom:6px}

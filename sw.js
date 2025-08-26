@@ -1,4 +1,4 @@
-const SW_VERSION = 'bn-v1.0.1'; // ↑ Version erhöhen, damit Cache erneuert wird
+const SW_VERSION = 'bn-v1.0.2'; // Version erhöht für Update
 const CORE = [
   'index.html',
   'css/style.css',
@@ -11,6 +11,7 @@ const CORE = [
   'js/ui.js',
   'js/map.js',
   'js/analytics.js',
+  'js/status.js',            // 🔴 neu cachen
   'js/routing/nearest.js',
   'js/routing/dijkstra.js',
   'js/capacity/none.js',
@@ -31,7 +32,6 @@ self.addEventListener('install', (e)=>{
     self.skipWaiting();
   })());
 });
-
 self.addEventListener('activate', (e)=>{
   e.waitUntil((async()=>{
     const keys = await caches.keys();
@@ -39,7 +39,6 @@ self.addEventListener('activate', (e)=>{
     self.clients.claim();
   })());
 });
-
 self.addEventListener('fetch', (e)=>{
   const url = new URL(e.request.url);
   if (url.origin !== location.origin) return;
@@ -49,9 +48,7 @@ self.addEventListener('fetch', (e)=>{
     if (cached) return cached;
     try{
       const res = await fetch(e.request);
-      if (e.request.method === 'GET' && res.status === 200){
-        cache.put(e.request, res.clone());
-      }
+      if (e.request.method === 'GET' && res.status === 200){ cache.put(e.request, res.clone()); }
       return res;
     }catch(err){
       if (e.request.mode === 'navigate'){

@@ -1,4 +1,3 @@
-
 import { bus } from './bus.js';
 
 export const LS_KEYS = {
@@ -25,12 +24,13 @@ export const defaults = {
 };
 
 export const state = {
-  containers: [], // array of {nr, farbe, standort, flags, klasse, stapelbar, gewicht_kg, ...}
-  sites: [], // array of {id, x, y, halle, tags, kapazitaet, verbot_klassen}
+  containers: [],
+  sites: [],
   settings: structuredClone(defaults.settings),
-  start: null, // {type:'site'|'point', id?, x?, y?, label}
-  mapImage: null, // data URL
-  cart: [], // array of container nr strings
+  start: null,
+  mapImage: null,
+  cart: [],
+  warnings: { containers:[], sites:[], settings:[] } // 🔴 menschenlesbare Import-Warnungen
 };
 
 export let featureFlags = loadFlags();
@@ -42,10 +42,7 @@ function loadFlags(){
   }catch(e){}
   return structuredClone(defaults.featureFlags);
 }
-
-export function saveFlags(){
-  localStorage.setItem(LS_KEYS.featureFlags, JSON.stringify(featureFlags));
-}
+export function saveFlags(){ localStorage.setItem(LS_KEYS.featureFlags, JSON.stringify(featureFlags)); }
 
 export function initFromLocalStorage(){
   try{
@@ -55,9 +52,9 @@ export function initFromLocalStorage(){
     const m = localStorage.getItem(LS_KEYS.mapImage);
     const st = localStorage.getItem(LS_KEYS.start);
     const cart = localStorage.getItem(LS_KEYS.cart);
-    if (c) state.containers = parseContainersCSV(c).rows;
-    if (s) state.sites = parseSitesCSV(s).rows;
-    if (j) {
+    if (c){ state.containers = parseContainersCSV(c).rows; }
+    if (s){ state.sites = parseSitesCSV(s).rows; }
+    if (j){
       state.settings = migrateSettings(JSON.parse(j));
       if (state.settings.featureFlags) featureFlags = state.settings.featureFlags;
     }
@@ -69,67 +66,100 @@ export function initFromLocalStorage(){
   }
 }
 
-export function resetAll(){
-  Object.values(LS_KEYS).forEach(k => localStorage.removeItem(k));
-}
-
+export function resetAll(){ Object.values(LS_KEYS).forEach(k => localStorage.removeItem(k)); }
 export function getLocalStorageSummary(){
   const out = {};
-  for (let i=0;i<localStorage.length;i++){
-    const k = localStorage.key(i);
-    out[k] = (localStorage.getItem(k) || '').length + ' bytes';
-  }
+  for (let i=0;i<localStorage.length;i++){ const k = localStorage.key(i); out[k] = (localStorage.getItem(k)||'').length + ' bytes'; }
   return out;
 }
-
 export function dumpState(){
   return {
     containers: state.containers.slice(0,5).concat(state.containers.length>5?['…']:[]),
     sites: state.sites.slice(0,5).concat(state.sites.length>5?['…']:[]),
-    settings: state.settings,
-    start: state.start,
-    flags: featureFlags,
-    cart: state.cart
+    settings: state.settings, start: state.start, flags: featureFlags, cart: state.cart
   };
 }
 
-// ---------- CSV parsing & validation (warning-level) ----------
+// ---------- CSV parsing & validation (robust, menschenlesbare Warnungen) ----------
+function detectDelimiter(text){
+  const sample = text.slice(0, 2000);
+  const c = (sample.match(/,/g)||[]).length;
+  const s = (sample.match(/;/g)||[]).length;
+  return s > c ? ';' : ',';
+}
+function splitSmart(line, delim){ return line.split(delim).map(x=>x.trim()); }
+
 export function parseContainersCSV(text){
-  const lines = text.trim().split(/\r?\n/);
-  const headers = lines.shift().split(',').map(h=>h.trim());
-  const expected = ['typ','farbe','standort','flags','klasse','stapelbar','gewicht_kg'];
   const warnings = [];
-  expected.forEach(h=>{ if(!headers.includes(h)) warnings.push('Header fehlt: '+h); });
+  const delim = detectDelimiter(text);
+  if (delim === ';') warnings.push('CSV mit **Semikolon** erkannt. Import funktioniert, empfohlen ist **Komma** als Trennzeichen.');
+
+  const lines = text.trim().split(/\r?\n/).filter(l=>l.trim().length>0);
+  if (!lines.length) return { headers:[], rows:[], warnings: warnings.concat(['Datei ist leer.']) };
+
+  const headers = splitSmart(lines.shift(), delim);
+  const expected = ['typ','farbe','standort','flags','klasse','stapelbar','gewicht_kg'];
+  const hasNrAlias = headers.includes('nr') && !headers.includes('typ');
+  if (hasNrAlias) warnings.push('Spalte **typ** fehlt – **nr** wird als Behälter‑Nr. verwendet.');
+  expected.forEach(h=>{ if(!headers.includes(h) && !(h==='typ' && hasNrAlias)) warnings.push('Spalte **'+h+'** fehlt.'); });
+
   const rows = [];
+  let rowIdx = 1;
   for (const line of lines){
-    if (!line.trim()) continue;
-    const parts = line.split(',').map(x=>x.trim());
+    rowIdx++;
+    const parts = splitSmart(line, delim);
     const rec = {};
     headers.forEach((h,i)=>rec[h]=parts[i]);
-    // Normalize
-    rec.nr = rec.typ || rec.nr; // map "typ" -> "nr"
-    if (rec.nr) rec.nr = String(rec.nr);
-    if (rec.standort) rec.standort = Number(rec.standort);
+    rec.nr = rec.typ || rec.nr; // alias
+    if (rec.nr) rec.nr = String(rec.nr).trim();
+
+    if (rec.standort!==undefined) {
+      const n = Number(rec.standort);
+      if (Number.isNaN(n)) { warnings.push(`Zeile ${rowIdx}: **standort** ist keine Zahl.`); }
+      rec.standort = n;
+    }
+
+    if (rec.stapelbar!==undefined) {
+      rec.stapelbar = String(rec.stapelbar).toLowerCase()==='true' ? 'true' : 'false';
+    }
+
+    if (rec.gewicht_kg!==undefined && rec.gewicht_kg!==''){
+      const g = Number(rec.gewicht_kg);
+      if (Number.isNaN(g)) warnings.push(`Zeile ${rowIdx}: **gewicht_kg** ist keine Zahl (Dezimalpunkt verwenden).`);
+      rec.gewicht_kg = g;
+    }
+
     rows.push(rec);
   }
   return { headers, rows, warnings };
 }
 
 export function parseSitesCSV(text){
-  const lines = text.trim().split(/\r?\n/);
-  const headers = lines.shift().split(',').map(h=>h.trim());
-  const expected = ['id','x','y','halle','tags','kapazitaet','verbot_klassen'];
   const warnings = [];
-  expected.forEach(h=>{ if(!headers.includes(h)) warnings.push('Header fehlt: '+h); });
+  const delim = detectDelimiter(text);
+  if (delim === ';') warnings.push('Standorte: Semikolon erkannt. Empfohlen ist **Komma** als Trennzeichen.');
+
+  const lines = text.trim().split(/\r?\n/).filter(l=>l.trim().length>0);
+  if (!lines.length) return { headers:[], rows:[], warnings: warnings.concat(['Datei ist leer.']) };
+
+  const headers = splitSmart(lines.shift(), delim);
+  const expected = ['id','x','y','halle','tags','kapazitaet','verbot_klassen'];
+  expected.forEach(h=>{ if(!headers.includes(h)) warnings.push('Spalte **'+h+'** fehlt.'); });
+
   const rows = [];
+  let rowIdx = 1;
   for (const line of lines){
-    if (!line.trim()) continue;
-    const parts = line.split(',').map(x=>x.trim());
+    rowIdx++;
+    const parts = splitSmart(line, delim);
     const rec = {};
     headers.forEach((h,i)=>rec[h]=parts[i]);
+
     rec.id = Number(rec.id);
     rec.x = Number(rec.x);
     rec.y = Number(rec.y);
+    if (Number.isNaN(rec.id)) warnings.push(`Zeile ${rowIdx}: **id** ist keine Zahl.`);
+    if (Number.isNaN(rec.x) || Number.isNaN(rec.y)) warnings.push(`Zeile ${rowIdx}: **x/y** sind keine Zahlen.`);
+
     rows.push(rec);
   }
   return { headers, rows, warnings };
@@ -137,12 +167,8 @@ export function parseSitesCSV(text){
 
 export function migrateSettings(s){
   const out = { ...defaults.settings, ...s };
-  // Example migration: ensure schema >= 1.1
   if (!out.schema) out.schema = '1.0';
-  if (out.schema === '1.0') {
-    if (out.px_per_meter == null) out.px_per_meter = null;
-    out.schema = '1.1';
-  }
+  if (out.schema === '1.0') { if (out.px_per_meter == null) out.px_per_meter = null; out.schema = '1.1'; }
   if (!out.featureFlags) out.featureFlags = structuredClone(defaults.featureFlags);
   return out;
 }
@@ -151,24 +177,30 @@ export function migrateSettings(s){
 export function importContainersCSV(text){
   const {rows, warnings} = parseContainersCSV(text);
   state.containers = rows;
+  state.warnings.containers = warnings;
   localStorage.setItem(LS_KEYS.containers, text);
   bus.emit('containers:updated', { count: rows.length, warnings });
+  bus.emit('warnings:update', {});
   return warnings;
 }
 export function importSitesCSV(text){
   const {rows, warnings} = parseSitesCSV(text);
   state.sites = rows;
+  state.warnings.sites = warnings;
   localStorage.setItem(LS_KEYS.sites, text);
   bus.emit('sites:updated', { count: rows.length, warnings });
+  bus.emit('warnings:update', {});
   return warnings;
 }
 export function importSettingsJSON(text){
   const obj = migrateSettings(JSON.parse(text));
   state.settings = obj;
+  state.warnings.settings = []; // hier könnten schema/migrations-Warnungen ergänzt werden
   featureFlags = obj.featureFlags || featureFlags;
   saveFlags();
   localStorage.setItem(LS_KEYS.settings, JSON.stringify(obj));
   bus.emit('settings:updated', { obj });
+  bus.emit('warnings:update', {});
 }
 
 export function setMapImage(dataUrl){
@@ -176,7 +208,6 @@ export function setMapImage(dataUrl){
   localStorage.setItem(LS_KEYS.mapImage, dataUrl);
   bus.emit('map:image', {});
 }
-
 export function setStartPointFromSite(siteId){
   const site = state.sites.find(s=>s.id===siteId);
   if (!site) return;
@@ -184,7 +215,6 @@ export function setStartPointFromSite(siteId){
   localStorage.setItem(LS_KEYS.start, JSON.stringify(state.start));
   bus.emit('start:changed', { start: state.start });
 }
-
 export function setStartPoint(x, y){
   state.start = { type:'point', x, y, label: 'Start ('+Math.round(x)+','+Math.round(y)+')' };
   localStorage.setItem(LS_KEYS.start, JSON.stringify(state.start));
@@ -205,8 +235,7 @@ export function exportAllJSON(){
     settings_json: localStorage.getItem(LS_KEYS.settings)||JSON.stringify(state.settings),
     map_image: localStorage.getItem(LS_KEYS.mapImage)||null
   };
-  const blob = new Blob([JSON.stringify(out, null, 2)], {type:'application/json'});
-  return blob;
+  return new Blob([JSON.stringify(out, null, 2)], {type:'application/json'});
 }
 
 // ---------- Tour logs ----------
@@ -217,7 +246,6 @@ export function appendTourLog(log){
   list.push(log);
   localStorage.setItem(key, JSON.stringify(list));
 }
-
 export function exportTourCSV(){
   const key = LS_KEYS.tourLogs;
   let list = [];
@@ -225,8 +253,7 @@ export function exportTourCSV(){
   const headers = ['ts','stops','behaelter','dist_m','eta_s','tei','cluster','uncalibrated'];
   const lines = [headers.join(',')];
   for (const r of list){
-    lines.push([r.ts, r.stops, r.behaelter, Math.round(r.dist_m), Math.round(r.eta_s), r.tei.toFixed(2), r.cluster.toFixed(2), r.uncalibrated?'1':'0'].join(','));
+    lines.push([r.ts, r.stops, r.behaelter, Math.round(r.dist_m||0), Math.round(r.eta_s||0), (r.tei||0).toFixed(2), (r.cluster||0).toFixed(2), r.uncalibrated?'1':'0'].join(','));
   }
-  const blob = new Blob([lines.join('\n')], {type:'text/csv'});
-  return blob;
+  return new Blob([lines.join('\n')], {type:'text/csv'});
 }

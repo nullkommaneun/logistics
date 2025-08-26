@@ -1,0 +1,21 @@
+{
+  "schema": "1.1",
+  "updatedAt": "2025-08-26",
+  "px_per_meter": 8.5,
+  "speed_kmh_default": 7,
+  "hallen": {
+    "Halle 1": {
+      "x": 100,
+      "y": 100
+    },
+    "Halle 4": {
+      "x": 900,
+      "y": 420
+    }
+  },
+  "featureFlags": {
+    "routing": "nearest",
+    "capacity": "none",
+    "uiDensity": "comfort"
+  }
+}

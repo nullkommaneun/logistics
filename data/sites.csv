@@ -1,1 +1,14 @@
-
+id,x,y,halle,tags,kapazitaet,verbot_klassen
+1,120,120,Halle 1,rampe|innen,,
+2,280,140,Halle 1,rampe|innen,,
+3,420,180,Halle 2,rampe|innen,,
+4,600,220,Halle 3,rampe|innen,,
+5,760,260,Halle 3,rampe|innen,,
+6,900,300,Halle 4,rampe|innen,,
+7,920,420,Halle 4,rampe|innen,,
+8,740,460,Halle 3,rampe|innen,,
+9,560,480,Halle 3,rampe|innen,,
+10,380,520,Halle 2,rampe|innen,,
+11,220,560,Halle 2,rampe|innen,,
+12,140,420,Halle 1,rampe|innen,,
+13,480,340,Halle 2,rampe|innen,,

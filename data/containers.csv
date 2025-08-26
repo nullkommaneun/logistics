@@ -1,0 +1,13 @@
+typ,farbe,standort,flags,klasse,stapelbar,gewicht_kg
+529231,gruen,5,VB,M,true,18
+529232,blau,7,,M,true,20
+529233,rot,2,VB,S,false,28
+529234,gelb,9,,M,true,18
+529235,grau,12,,L,true,35
+529236,gruen,3,,M,true,18
+529237,blau,8,VB,M,true,20
+529238,rot,1,,S,false,28
+529239,gelb,4,VB,M,true,18
+529240,grau,6,,L,true,35
+529241,gruen,10,,M,true,18
+529242,blau,11,VB,M,true,20

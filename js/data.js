@@ -29,17 +29,14 @@ export const state = {
   settings: structuredClone(defaults.settings),
   start: null,
   mapImage: null,
-  cart: [],
-  warnings: { containers:[], sites:[], settings:[] } // 🔴 menschenlesbare Import-Warnungen
+  cart: [],                                  // ab v1.2: [{nr, siteId}] ; Alt: ["529231", ...]
+  warnings: { containers:[], sites:[], settings:[] }
 };
 
 export let featureFlags = loadFlags();
 
 function loadFlags(){
-  try{
-    const s = localStorage.getItem(LS_KEYS.featureFlags);
-    if (s) return JSON.parse(s);
-  }catch(e){}
+  try{ const s = localStorage.getItem(LS_KEYS.featureFlags); if (s) return JSON.parse(s); }catch(e){}
   return structuredClone(defaults.featureFlags);
 }
 export function saveFlags(){ localStorage.setItem(LS_KEYS.featureFlags, JSON.stringify(featureFlags)); }
@@ -52,35 +49,26 @@ export function initFromLocalStorage(){
     const m = localStorage.getItem(LS_KEYS.mapImage);
     const st = localStorage.getItem(LS_KEYS.start);
     const cart = localStorage.getItem(LS_KEYS.cart);
-    if (c){ state.containers = parseContainersCSV(c).rows; }
-    if (s){ state.sites = parseSitesCSV(s).rows; }
-    if (j){
-      state.settings = migrateSettings(JSON.parse(j));
-      if (state.settings.featureFlags) featureFlags = state.settings.featureFlags;
-    }
+    if (c) state.containers = parseContainersCSV(c).rows;
+    if (s) state.sites = parseSitesCSV(s).rows;
+    if (j){ state.settings = migrateSettings(JSON.parse(j)); if (state.settings.featureFlags) featureFlags = state.settings.featureFlags; }
     if (m) state.mapImage = m;
     if (st) state.start = JSON.parse(st);
     if (cart) state.cart = JSON.parse(cart);
-  }catch(err){
-    console.warn('initFromLocalStorage', err);
-  }
+  }catch(err){ console.warn('initFromLocalStorage', err); }
 }
 
 export function resetAll(){ Object.values(LS_KEYS).forEach(k => localStorage.removeItem(k)); }
 export function getLocalStorageSummary(){
-  const out = {};
-  for (let i=0;i<localStorage.length;i++){ const k = localStorage.key(i); out[k] = (localStorage.getItem(k)||'').length + ' bytes'; }
-  return out;
+  const out = {}; for (let i=0;i<localStorage.length;i++){ const k = localStorage.key(i); out[k] = (localStorage.getItem(k)||'').length + ' bytes'; } return out;
 }
 export function dumpState(){
-  return {
-    containers: state.containers.slice(0,5).concat(state.containers.length>5?['…']:[]),
-    sites: state.sites.slice(0,5).concat(state.sites.length>5?['…']:[]),
-    settings: state.settings, start: state.start, flags: featureFlags, cart: state.cart
-  };
+  return { containers: state.containers.slice(0,5).concat(state.containers.length>5?['…']:[]),
+           sites: state.sites.slice(0,5).concat(state.sites.length>5?['…']:[]),
+           settings: state.settings, start: state.start, flags: featureFlags, cart: state.cart };
 }
 
-// ---------- CSV parsing & validation (robust, menschenlesbare Warnungen) ----------
+// ---------- CSV parsing & validation ----------
 function detectDelimiter(text){
   const sample = text.slice(0, 2000);
   const c = (sample.match(/,/g)||[]).length;
@@ -88,6 +76,12 @@ function detectDelimiter(text){
   return s > c ? ';' : ',';
 }
 function splitSmart(line, delim){ return line.split(delim).map(x=>x.trim()); }
+function parseStandorteField(val){
+  if (!val) return [];
+  // akzeptiere "11|12" oder "11,12" oder "11/12"
+  const parts = String(val).split(/[|,\/]/).map(x=>x.trim()).filter(Boolean);
+  return parts.map(n => Number(n)).filter(n => Number.isFinite(n));
+}
 
 export function parseContainersCSV(text){
   const warnings = [];
@@ -98,10 +92,12 @@ export function parseContainersCSV(text){
   if (!lines.length) return { headers:[], rows:[], warnings: warnings.concat(['Datei ist leer.']) };
 
   const headers = splitSmart(lines.shift(), delim);
-  const expected = ['typ','farbe','standort','flags','klasse','stapelbar','gewicht_kg'];
+  const expected = ['typ','farbe','standort','flags','klasse','stapelbar','gewicht_kg']; // standorte ist optional
   const hasNrAlias = headers.includes('nr') && !headers.includes('typ');
-  if (hasNrAlias) warnings.push('Spalte **typ** fehlt – **nr** wird als Behälter‑Nr. verwendet.');
+  if (hasNrAlias) warnings.push('Spalte **typ** fehlt – **nr** wird als Behälter-Nr. verwendet.');
   expected.forEach(h=>{ if(!headers.includes(h) && !(h==='typ' && hasNrAlias)) warnings.push('Spalte **'+h+'** fehlt.'); });
+
+  const hasMulti = headers.includes('standorte');
 
   const rows = [];
   let rowIdx = 1;
@@ -110,13 +106,26 @@ export function parseContainersCSV(text){
     const parts = splitSmart(line, delim);
     const rec = {};
     headers.forEach((h,i)=>rec[h]=parts[i]);
-    rec.nr = rec.typ || rec.nr; // alias
+
+    rec.nr = rec.typ || rec.nr;
     if (rec.nr) rec.nr = String(rec.nr).trim();
 
-    if (rec.standort!==undefined) {
+    // Einzellstandort
+    if (rec.standort!==undefined && rec.standort!=='') {
       const n = Number(rec.standort);
-      if (Number.isNaN(n)) { warnings.push(`Zeile ${rowIdx}: **standort** ist keine Zahl.`); }
+      if (Number.isNaN(n)) warnings.push(`Zeile ${rowIdx}: **standort** ist keine Zahl.`);
       rec.standort = n;
+    } else {
+      rec.standort = undefined;
+    }
+
+    // Multi-Standorte (optional)
+    if (hasMulti){
+      rec.standorte = parseStandorteField(rec.standorte);
+    } else if (typeof rec.standort === 'number' && Number.isFinite(rec.standort)) {
+      rec.standorte = [rec.standort];
+    } else {
+      rec.standorte = [];
     }
 
     if (rec.stapelbar!==undefined) {
@@ -195,7 +204,7 @@ export function importSitesCSV(text){
 export function importSettingsJSON(text){
   const obj = migrateSettings(JSON.parse(text));
   state.settings = obj;
-  state.warnings.settings = []; // hier könnten schema/migrations-Warnungen ergänzt werden
+  state.warnings.settings = [];
   featureFlags = obj.featureFlags || featureFlags;
   saveFlags();
   localStorage.setItem(LS_KEYS.settings, JSON.stringify(obj));

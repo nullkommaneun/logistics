@@ -1,22 +1,20 @@
 import { bus } from './bus.js';
-import { state, featureFlags, saveFlags, initFromLocalStorage, importContainersCSV, importSitesCSV, importSettingsJSON, exportAllJSON, setStartPointFromSite } from './data.js';
+import { state, featureFlags, initFromLocalStorage, importContainersCSV, importSitesCSV, importSettingsJSON, exportAllJSON } from './data.js';
 import { searchContainers } from './search.js';
-import { addToCart, removeFromCart, clearCart, getCartContainers, getUniqueSiteIds } from './cart.js';
+import { addToCart, removeFromCart, clearCart, getCartItems, getUniqueSiteIds } from './cart.js';
 import { computeKPIs, logTour } from './analytics.js';
-import { initStatus } from './status.js';   // 🔴 neu
+import { initStatus } from './status.js';
 
 let els = {};
 let routeCache = null;
 
-// Hilfsfunktionen für Entfernung/ETA pro Item
-const ppmGetter = ()=>state.settings.px_per_meter;
 function mPerS(){ const v = state.settings.speed_kmh_default || 7; return (v*1000)/3600; }
-function distFromStartMeters(site){
+function distMetersFromStart(site){
   if (!state.start || !site) return null;
   const dx = (state.start.x||0) - site.x;
   const dy = (state.start.y||0) - site.y;
   const px = Math.hypot(dx, dy);
-  const ppm = ppmGetter();
+  const ppm = state.settings.px_per_meter;
   if (!ppm) return null;
   return px/ppm;
 }
@@ -33,7 +31,6 @@ export function initUI(){
     stepBar: document.getElementById('stepBar'),
     distTotal: document.getElementById('distTotal'),
     etaTotal: document.getElementById('etaTotal'),
-    // data
     fileContainers: document.getElementById('fileContainers'),
     fileSites: document.getElementById('fileSites'),
     fileSettings: document.getElementById('fileSettings'),
@@ -45,12 +42,9 @@ export function initUI(){
     sumCal: document.getElementById('sumCal'),
     sumStart: document.getElementById('sumStart'),
     snackbar: document.getElementById('snackbar'),
-    statusArea: document.getElementById('statusArea') // 🔴 neu
+    statusArea: document.getElementById('statusArea')
   };
 
-  document.body.classList.toggle('density-compact', featureFlags.uiDensity==='compact');
-
-  // Status-Engine aktivieren
   initStatus(els.statusArea);
 
   els.searchInput.addEventListener('input', onSearchInput);
@@ -62,26 +56,30 @@ export function initUI(){
     if (e.target.matches('button.remove')){ removeFromCart(li.dataset.nr); }
   });
   els.clearCartBtn.addEventListener('click', ()=>{ clearCart(); });
+
   els.exportTourBtn.addEventListener('click', exportTour);
 
-  // Import handlers mit Warntexten
   els.fileContainers.addEventListener('change', async (e)=>{
-    const txt = await e.target.files[0].text();
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    const txt = await f.text();
     const warnings = importContainersCSV(txt);
     snack('Container importiert' + (warnings.length? ' – Warnungen vorhanden': ''));
     refreshSummaries(); renderCart(); recomputeRoute();
   });
   els.fileSites.addEventListener('change', async (e)=>{
-    const txt = await e.target.files[0].text();
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    const txt = await f.text();
     const warnings = importSitesCSV(txt);
     snack('Standorte importiert' + (warnings.length? ' – Warnungen vorhanden': ''));
     refreshSummaries(); recomputeRoute();
   });
   els.fileSettings.addEventListener('change', async (e)=>{
-    const txt = await e.target.files[0].text();
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    const txt = await f.text();
     importSettingsJSON(txt);
     snack('Einstellungen geladen'); refreshSummaries(); recomputeRoute();
   });
+
   els.exportAllBtn.addEventListener('click', exportAll);
   els.resetBtn.addEventListener('click', ()=>{ if(confirm('Alle lokalen Daten löschen?')){ localStorage.clear(); location.reload(); } });
 
@@ -90,7 +88,7 @@ export function initUI(){
   bus.on('sites:updated', refreshSummaries);
   bus.on('settings:updated', refreshSummaries);
   bus.on('map:calibrated', refreshSummaries);
-  bus.on('start:changed', refreshSummaries);
+  bus.on('start:changed', ()=>{ refreshSummaries(); renderCart(); recomputeRoute(); });
 
   refreshSummaries();
   renderCart();
@@ -116,7 +114,8 @@ function renderAutocomplete(list){
     const div = document.createElement('div');
     div.setAttribute('role','option');
     div.setAttribute('aria-selected', i===0 ? 'true' : 'false');
-    div.textContent = `${c.nr} · Ort ${c.standort} · ${c.farbe}${c.flags ? ' · '+c.flags : ''}`;
+    const alt = (c.standorte && c.standorte.length>1) ? ` · ALT:${c.standorte.join('|')}` : '';
+    div.textContent = `${c.nr} · Ort ${c.standort??(c.standorte?.[0]??'–')} · ${c.farbe||'–'}${c.flags ? ' · '+c.flags : ''}${alt}`;
     div.addEventListener('click', ()=>{ addToCart(c.nr); els.searchInput.focus(); });
     ac.appendChild(div);
   });
@@ -132,20 +131,23 @@ function tryAddTopOrExact(){
   els.searchInput.select(); els.searchInput.focus();
 }
 
+// ---- Cart-Rendering (mit gewähltem Standort je Item) ----
 function renderCart(){
-  const list = getCartContainers();
+  const items = getCartItems();
   els.cartList.innerHTML = '';
-  for (const c of list){
-    const li = document.createElement('li');
-    li.dataset.nr = c.nr;
-    const site = state.sites.find(s=>s.id===Number(c.standort));
-    const dm = distFromStartMeters(site);
+  for (const it of items){
+    const c = it.container;
+    const site = state.sites.find(s=>s.id===Number(it.entry.siteId));
+    const dm = site ? distMetersFromStart(site) : null;
     const eta = dm!=null ? Math.round(dm / mPerS()) + ' s' : '–';
     const dmTxt = dm!=null ? Math.round(dm)+' m' : '–';
+    const alt = (c.standorte && c.standorte.length>1) ? ` · ALT:${c.standorte.join('|')}` : '';
+    const li = document.createElement('li');
+    li.dataset.nr = c.nr;
     li.innerHTML = `
       <div>
         <div><strong>${c.nr}</strong> <span class="badge">${c.farbe||'–'}</span> ${c.flags?'<span class="badge">'+c.flags+'</span>':''}</div>
-        <div class="meta">Ort ${c.standort} · Klasse ${c.klasse||'–'} · ${c.stapelbar==='true'?'stapelbar':'nicht stapelbar'} · ${(c.gewicht_kg||'–')} kg · <strong>${dmTxt}</strong> · ETA ${eta}</div>
+        <div class="meta">Ort ${it.entry.siteId??'–'}${alt} · Klasse ${c.klasse||'–'} · ${c.stapelbar==='true'?'stapelbar':'nicht stapelbar'} · ${(c.gewicht_kg||'–')} kg · <strong>${dmTxt}</strong> · ETA ${eta}</div>
       </div>
       <div>
         <button class="btn remove">Entfernen</button>
@@ -190,8 +192,8 @@ function renderSteps(){
 }
 
 function renderKPIs(){
-  const list = getCartContainers();
-  const k = computeKPIs(routeCache||{}, list);
+  const items = getCartItems();
+  const k = computeKPIs(routeCache||{}, items);
   const kpis = [
     ['Stops', k.stops],
     ['Behälter', k.behaelter],

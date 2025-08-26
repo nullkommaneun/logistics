@@ -1,5 +1,4 @@
-
-const SW_VERSION = 'bn-v1.0.0';
+const SW_VERSION = 'bn-v1.0.1'; // ↑ Version erhöhen, damit Cache erneuert wird
 const CORE = [
   'index.html',
   'css/style.css',
@@ -43,7 +42,6 @@ self.addEventListener('activate', (e)=>{
 
 self.addEventListener('fetch', (e)=>{
   const url = new URL(e.request.url);
-  // Only handle same-origin
   if (url.origin !== location.origin) return;
   e.respondWith((async()=>{
     const cache = await caches.open(SW_VERSION);
@@ -56,7 +54,6 @@ self.addEventListener('fetch', (e)=>{
       }
       return res;
     }catch(err){
-      // offline fallback: return index for navigation
       if (e.request.mode === 'navigate'){
         const idx = await cache.match('index.html');
         return idx || new Response('<h1>Offline</h1>', {headers:{'Content-Type':'text/html'}});

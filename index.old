@@ -19,9 +19,7 @@
   <main id="main" class="layout">
     <section class="panel search-panel" aria-label="Suche und Eingabe">
       <label for="searchInput" class="visually-hidden">Behälter‑Nr. eingeben (6-stellig)</label>
-      <!-- numerische Eingabe gehärtet -->
-      <input id="searchInput" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="6"
-             autocomplete="off" placeholder="Behälter‑Nr. (6-stellig)" aria-label="Behälternummer"/>
+      <input id="searchInput" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="Behälter‑Nr. (6-stellig)" />
       <button id="addBtn" class="btn primary" aria-label="zur Tour hinzufügen">Hinzufügen</button>
       <div id="acList" class="autocomplete" role="listbox" aria-label="Vorschläge"></div>
       <p class="hint">Serieneingabe: <kbd>Enter</kbd> fügt hinzu. <strong>Nicht während der Fahrt bedienen.</strong></p>
@@ -43,20 +41,13 @@
       <div class="panel-header">
         <h2>Karte</h2>
         <div class="actions">
-          <!-- Sichtbarer Upload-Button: Input nur innerhalb .file absolut -->
-          <label class="btn file">
-            Plan laden
-            <input type="file" id="planFile" accept="image/*" class="file-input" aria-label="Werksplan hochladen">
-          </label>
+          <input type="file" id="planFile" accept="image/*" class="file-input" aria-label="Werksplan hochladen">
           <button id="btnUseSamplePlan" class="btn">Sample‑Plan</button>
           <button id="btnCalibrate" class="btn">Kalibrieren</button>
           <button id="btnSetStart" class="btn">Startpunkt</button>
         </div>
       </div>
       <div class="canvas-wrap">
-        <canvas id="mapCanvas" width="1000" height="700" aria-label="Werksplan"></canvas>
-
-        <!-- Nicht-modales Kalibrierungs-Overlay innerhalb der Canvas-Fläche -->
         <div id="calOverlay" class="cal-overlay" hidden>
           <div class="cal-card">
             <div class="cal-title">Kalibrierung</div>
@@ -70,6 +61,7 @@
             </div>
           </div>
         </div>
+        <canvas id="mapCanvas" width="1000" height="700" aria-label="Werksplan"></canvas>
       </div>
       <div class="stepbar" id="stepBar" aria-live="polite"></div>
     </section>

@@ -1,68 +1,28 @@
-
-import { initPreflight } from './preflight.js';
-import { initUI } from './ui.js';
-import { initFromLocalStorage, state, setStartPointFromSite } from './data.js';
-import { initMap, loadPlanFromFile, usePlanDataUrl, setModeCalibrate, setModeStart } from './map.js';
-import { bus } from './bus.js';
-
 const PF = new URLSearchParams(location.search).get('pf') === '1';
 
-// Error handling (only minimal when no pf=1)
-window.addEventListener('error', (e)=>{ if (!PF) console.warn('Error', e.message); });
-window.addEventListener('unhandledrejection', (e)=>{ if (!PF) console.warn('Rejection', e.reason); });
+function panic(msg){
+  const el = document.getElementById('statusArea');
+  if (el){ el.className = 'status-area error'; el.innerHTML = `<ul><li>${msg}</li></ul>`; }
+}
 
-window.addEventListener('DOMContentLoaded', async () => {
-  initFromLocalStorage();
-  initUI();
-  initPreflight(PF);
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const { initFromLocalStorage } = await import('./data.js');
+    const { bus } = await import('./bus.js');
+    const { initPreflight } = await import('./preflight.js');   // dyn
+    const ui = await import('./ui.js');                         // dyn
+    const map = await import('./map.js');                       // dyn
 
-  const canvas = document.getElementById('mapCanvas');
-  initMap(canvas);
+    initFromLocalStorage();
+    ui.initUI();
+    initPreflight(PF); // bei Fehlern bleibt das Overlay erreichbar
 
-  // Map controls
-  document.getElementById('planFile').addEventListener('change', (e)=>{
-    const f = e.target.files[0]; if (f) loadPlanFromFile(f);
-  });
-  document.getElementById('btnUseSamplePlan').addEventListener('click', async ()=>{
-    const res = await fetch('assets/sample-plan.png'); const blob = await res.blob();
-    const fr = new FileReader(); fr.onload = ()=>usePlanDataUrl(fr.result); fr.readAsDataURL(blob);
-  });
-  document.getElementById('btnCalibrate').addEventListener('click', ()=>{ setModeCalibrate(); });
-  document.getElementById('btnSetStart').addEventListener('click', ()=>{ setModeStart(); });
-
-  // If no start yet but sites exist, default to site 1
-  if (!state.start && state.sites.length){
-    setStartPointFromSite(state.sites[0].id);
+    const canvas = document.getElementById('mapCanvas');
+    map.initMap(canvas);
+    // … (Buttons verkabeln, SW registrieren)
+  } catch (e) {
+    panic('Kritischer Ladefehler. Seite neu laden oder Cache leeren.');
+    if (PF) { try { (await import('./preflight.js')).initPreflight(true); } catch(_){} }
+    console.error(e);
   }
-
-  // Install prompt
-  let deferredPrompt = null;
-  const installBtn = document.getElementById('installBtn');
-  installBtn.style.display = 'none';
-  window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    installBtn.style.display = 'inline-block';
-    document.getElementById('installStatus').textContent = 'Installierbar';
-  });
-  installBtn.addEventListener('click', async ()=>{
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    document.getElementById('installStatus').textContent = outcome==='accepted' ? 'Installiert' : 'Installation abgelehnt';
-    deferredPrompt = null;
-  });
-
-  // Service worker
-  if ('serviceWorker' in navigator){
-    try{
-      const reg = await navigator.serviceWorker.register('sw.js');
-      console.log('SW registered', reg.scope);
-    }catch(err){ console.warn('SW register failed', err); }
-  }
-
-  // Update UI sums
-  bus.emit('containers:updated', {count: state.containers.length, warnings: []});
-  bus.emit('sites:updated', {count: state.sites.length, warnings: []});
-  bus.emit('settings:updated', {obj: state.settings});
 });

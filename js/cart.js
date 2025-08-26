@@ -1,22 +1,21 @@
 import { bus } from './bus.js';
 import { state, LS_KEYS } from './data.js';
 
-// ---- Multi-Standort-Auswahl: wähle nächstgelegenen Standort (Pixel) ----
 function chooseSiteIdForContainer(cont){
   const candidates = Array.isArray(cont.standorte) && cont.standorte.length
     ? Array.from(new Set(cont.standorte.map(Number).filter(Number.isFinite)))
     : (Number.isFinite(cont.standort) ? [Number(cont.standort)] : []);
 
   if (!candidates.length) return null;
+  const start = state.start ? { x: state.start.x, y: state.start.y } : null;
 
-  if (!state.start) return candidates[0];
-
-  const start = { x: state.start.x, y: state.start.y };
   const siteObjs = candidates
     .map(id => state.sites.find(s => Number(s.id) === id))
     .filter(Boolean);
 
-  if (!siteObjs.length) return candidates[0];
+  if (!siteObjs.length) return null; // ⚠️ nur Sites mit Koordinate zulassen
+
+  if (!start) return siteObjs[0].id;
 
   siteObjs.sort((a,b)=>{
     const da = Math.hypot(start.x - a.x, start.y - a.y);
@@ -28,7 +27,6 @@ function chooseSiteIdForContainer(cont){
 
 function persist(){ localStorage.setItem(LS_KEYS.cart, JSON.stringify(state.cart)); }
 
-// Migrations-Helper: Alt-Format (string) -> Neu-Objekt {nr, siteId}
 function normalizeCart(){
   let changed = false;
   state.cart = state.cart.map(entry=>{
@@ -43,7 +41,6 @@ function normalizeCart(){
   if (changed) persist();
 }
 
-// Auto-Reassign bei Start/Sites-Änderung
 function reassignSites(){
   let changed = false;
   state.cart = state.cart.map(entry=>{
@@ -56,12 +53,10 @@ function reassignSites(){
   if (changed){ persist(); bus.emit('cart:changed', {}); }
 }
 
-// Event-Hooks
 bus.on('start:changed', reassignSites);
 bus.on('sites:updated', reassignSites);
 bus.on('containers:updated', ()=>{ normalizeCart(); reassignSites(); });
 
-// ---- Public API (unverändert benannt, aber mit neuen Strukturen) ----
 export function addToCart(nr){
   nr = String(nr||'').trim();
   if (!nr) return;
@@ -75,7 +70,6 @@ export function addToCart(nr){
 }
 
 export function removeFromCart(nr){
-  // entfernt das erste Matching (rückwärtskompatibel)
   const idx = state.cart.findIndex(e => (typeof e==='string' ? e===nr : e.nr===nr));
   if (idx>=0){ state.cart.splice(idx,1); persist(); bus.emit('cart:remove',{nr}); bus.emit('cart:changed',{}); }
 }
@@ -84,7 +78,6 @@ export function clearCart(){
   state.cart = []; persist(); bus.emit('cart:clear',{}); bus.emit('cart:changed',{});
 }
 
-// Liefert Items inkl. gewähltem Standort
 export function getCartItems(){
   normalizeCart();
   return state.cart.map(entry=>{

@@ -1,13 +1,12 @@
 import { bus } from './bus.js';
-import { state, featureFlags, importContainersCSV, importSitesCSV, importSettingsJSON, exportAllJSON } from './data.js';
+import { state, featureFlags, importContainersCSV, importSettingsJSON, exportAllJSON, importSitesJSON, exportSitesJSON } from './data.js';
 import { searchContainers } from './search.js';
 import { addToCart, removeFromCart, clearCart, getCartItems, getUniqueSiteIds } from './cart.js';
-import { computeKPIs } from './analytics.js'; // ⬅️ nur computeKPIs fest importieren
+import { computeKPIs } from './analytics.js';
 
 let els = {};
 let routeCache = null;
 
-// Geschwindigkeit [m/s]
 function mPerS(){ const v = state.settings.speed_kmh_default || 7; return (v*1000)/3600; }
 function distMetersFromStart(site){
   if (!state.start || !site) return null;
@@ -19,7 +18,6 @@ function distMetersFromStart(site){
   return px/ppm;
 }
 
-// ⚠️ async, damit wir optional status.js nachladen können
 export async function initUI(){
   els = {
     searchInput: document.getElementById('searchInput'),
@@ -33,8 +31,9 @@ export async function initUI(){
     distTotal: document.getElementById('distTotal'),
     etaTotal: document.getElementById('etaTotal'),
     fileContainers: document.getElementById('fileContainers'),
-    fileSites: document.getElementById('fileSites'),
+    fileSitesJson: document.getElementById('fileSitesJson'),
     fileSettings: document.getElementById('fileSettings'),
+    exportSitesBtn: document.getElementById('exportSitesBtn'),
     exportAllBtn: document.getElementById('exportAllBtn'),
     resetBtn: document.getElementById('resetBtn'),
     sumContainers: document.getElementById('sumContainers'),
@@ -46,7 +45,7 @@ export async function initUI(){
     statusArea: document.getElementById('statusArea')
   };
 
-  // Status-Engine optional laden – nie fatal
+  // Klartext-Status optional laden
   try { (await import('./status.js')).initStatus(els.statusArea); }
   catch (e) { console.warn('status.js fehlt – weiter ohne Klartext-Status.', e); }
 
@@ -69,12 +68,15 @@ export async function initUI(){
     snack('Container importiert' + (warnings.length? ' – Warnungen vorhanden': ''));
     refreshSummaries(); renderCart(); recomputeRoute();
   });
-  els.fileSites.addEventListener('change', async (e)=>{
+  els.fileSitesJson.addEventListener('change', async (e)=>{
     const f = e.target.files && e.target.files[0]; if (!f) return;
     const txt = await f.text();
-    const warnings = importSitesCSV(txt);
-    snack('Standorte importiert' + (warnings.length? ' – Warnungen vorhanden': ''));
-    refreshSummaries(); recomputeRoute();
+    importSitesJSON(txt);
+    snack('Standorte geladen'); refreshSummaries(); recomputeRoute();
+  });
+  els.exportSitesBtn.addEventListener('click', ()=>{
+    const blob = exportSitesJSON(); const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'bn-sites.json'; a.click(); URL.revokeObjectURL(url);
   });
   els.fileSettings.addEventListener('change', async (e)=>{
     const f = e.target.files && e.target.files[0]; if (!f) return;
@@ -88,7 +90,7 @@ export async function initUI(){
 
   bus.on('cart:changed', ()=>{ renderCart(); recomputeRoute(); });
   bus.on('containers:updated', refreshSummaries);
-  bus.on('sites:updated', refreshSummaries);
+  bus.on('sites:updated', ()=>{ refreshSummaries(); renderCart(); recomputeRoute(); });
   bus.on('settings:updated', refreshSummaries);
   bus.on('map:calibrated', refreshSummaries);
   bus.on('start:changed', ()=>{ refreshSummaries(); renderCart(); recomputeRoute(); });
@@ -197,16 +199,6 @@ function renderKPIs(){
     ['Cluster', (k.cluster*100).toFixed(0)+'%'],
   ];
   els.kpiBar.innerHTML = kpis.map(([n,v])=>`<div class="kpi"><div>${n}</div><div><strong>${v}</strong></div></div>`).join('');
-
-  // 🔐 Lazy & optional: logTour nur laden, wenn vorhanden – niemals fatal
-  if (k.behaelter && k.stops){
-    (async ()=>{ 
-      try{
-        const mod = await import('./analytics.js');
-        if (typeof mod.logTour === 'function') mod.logTour(k);
-      }catch(e){ /* bewusst ignorieren */ }
-    })();
-  }
 }
 
 async function exportAll(){

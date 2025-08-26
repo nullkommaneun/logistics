@@ -2,7 +2,8 @@ import { bus } from './bus.js';
 
 export const LS_KEYS = {
   containers: 'bn_containers_csv',
-  sites: 'bn_sites_csv',
+  sites: 'bn_sites',             // JSON-basiert
+  sites_csv_legacy: 'bn_sites_csv', // zur Migration (falls vorhanden)
   settings: 'bn_settings_json',
   mapImage: 'bn_map_image',
   start: 'bn_start',
@@ -25,16 +26,15 @@ export const defaults = {
 
 export const state = {
   containers: [],
-  sites: [],
+  sites: [], // [{id,x,y,halle}]
   settings: structuredClone(defaults.settings),
   start: null,
   mapImage: null,
-  cart: [],                                  // ab v1.2: [{nr, siteId}] ; Alt: ["529231", ...]
+  cart: [],
   warnings: { containers:[], sites:[], settings:[] }
 };
 
 export let featureFlags = loadFlags();
-
 function loadFlags(){
   try{ const s = localStorage.getItem(LS_KEYS.featureFlags); if (s) return JSON.parse(s); }catch(e){}
   return structuredClone(defaults.featureFlags);
@@ -45,12 +45,20 @@ export function initFromLocalStorage(){
   try{
     const c = localStorage.getItem(LS_KEYS.containers);
     const s = localStorage.getItem(LS_KEYS.sites);
+    const sLegacy = localStorage.getItem(LS_KEYS.sites_csv_legacy);
     const j = localStorage.getItem(LS_KEYS.settings);
     const m = localStorage.getItem(LS_KEYS.mapImage);
     const st = localStorage.getItem(LS_KEYS.start);
     const cart = localStorage.getItem(LS_KEYS.cart);
+
     if (c) state.containers = parseContainersCSV(c).rows;
-    if (s) state.sites = parseSitesCSV(s).rows;
+    if (s){ state.sites = JSON.parse(s)||[]; }
+    else if (sLegacy){ // sanfte Migration
+      const {rows} = parseSitesCSV(sLegacy);
+      state.sites = rows||[];
+      localStorage.setItem(LS_KEYS.sites, JSON.stringify(state.sites));
+      localStorage.removeItem(LS_KEYS.sites_csv_legacy);
+    }
     if (j){ state.settings = migrateSettings(JSON.parse(j)); if (state.settings.featureFlags) featureFlags = state.settings.featureFlags; }
     if (m) state.mapImage = m;
     if (st) state.start = JSON.parse(st);
@@ -68,7 +76,7 @@ export function dumpState(){
            settings: state.settings, start: state.start, flags: featureFlags, cart: state.cart };
 }
 
-// ---------- CSV parsing & validation ----------
+/* ---------- CSV parsing (Container) ---------- */
 function detectDelimiter(text){
   const sample = text.slice(0, 2000);
   const c = (sample.match(/,/g)||[]).length;
@@ -78,7 +86,6 @@ function detectDelimiter(text){
 function splitSmart(line, delim){ return line.split(delim).map(x=>x.trim()); }
 function parseStandorteField(val){
   if (!val) return [];
-  // akzeptiere "11|12" oder "11,12" oder "11/12"
   const parts = String(val).split(/[|,\/]/).map(x=>x.trim()).filter(Boolean);
   return parts.map(n => Number(n)).filter(n => Number.isFinite(n));
 }
@@ -92,9 +99,9 @@ export function parseContainersCSV(text){
   if (!lines.length) return { headers:[], rows:[], warnings: warnings.concat(['Datei ist leer.']) };
 
   const headers = splitSmart(lines.shift(), delim);
-  const expected = ['typ','farbe','standort','flags','klasse','stapelbar','gewicht_kg']; // standorte ist optional
+  const expected = ['typ','farbe','standort','flags','klasse','stapelbar','gewicht_kg']; // standorte optional
   const hasNrAlias = headers.includes('nr') && !headers.includes('typ');
-  if (hasNrAlias) warnings.push('Spalte **typ** fehlt – **nr** wird als Behälter-Nr. verwendet.');
+  if (hasNrAlias) warnings.push('Spalte **typ** fehlt – **nr** wird als Behälter‑Nr. verwendet.');
   expected.forEach(h=>{ if(!headers.includes(h) && !(h==='typ' && hasNrAlias)) warnings.push('Spalte **'+h+'** fehlt.'); });
 
   const hasMulti = headers.includes('standorte');
@@ -110,16 +117,12 @@ export function parseContainersCSV(text){
     rec.nr = rec.typ || rec.nr;
     if (rec.nr) rec.nr = String(rec.nr).trim();
 
-    // Einzellstandort
     if (rec.standort!==undefined && rec.standort!=='') {
       const n = Number(rec.standort);
       if (Number.isNaN(n)) warnings.push(`Zeile ${rowIdx}: **standort** ist keine Zahl.`);
       rec.standort = n;
-    } else {
-      rec.standort = undefined;
-    }
+    } else rec.standort = undefined;
 
-    // Multi-Standorte (optional)
     if (hasMulti){
       rec.standorte = parseStandorteField(rec.standorte);
     } else if (typeof rec.standort === 'number' && Number.isFinite(rec.standort)) {
@@ -137,43 +140,69 @@ export function parseContainersCSV(text){
       if (Number.isNaN(g)) warnings.push(`Zeile ${rowIdx}: **gewicht_kg** ist keine Zahl (Dezimalpunkt verwenden).`);
       rec.gewicht_kg = g;
     }
-
     rows.push(rec);
   }
   return { headers, rows, warnings };
 }
 
-export function parseSitesCSV(text){
-  const warnings = [];
+/* ---------- Sites (JSON) & Migration ---------- */
+function parseSitesCSV(text){ // nur für Migration
   const delim = detectDelimiter(text);
-  if (delim === ';') warnings.push('Standorte: Semikolon erkannt. Empfohlen ist **Komma** als Trennzeichen.');
-
   const lines = text.trim().split(/\r?\n/).filter(l=>l.trim().length>0);
-  if (!lines.length) return { headers:[], rows:[], warnings: warnings.concat(['Datei ist leer.']) };
-
+  if (!lines.length) return { headers:[], rows:[] };
   const headers = splitSmart(lines.shift(), delim);
-  const expected = ['id','x','y','halle','tags','kapazitaet','verbot_klassen'];
-  expected.forEach(h=>{ if(!headers.includes(h)) warnings.push('Spalte **'+h+'** fehlt.'); });
-
   const rows = [];
-  let rowIdx = 1;
   for (const line of lines){
-    rowIdx++;
-    const parts = splitSmart(line, delim);
-    const rec = {};
-    headers.forEach((h,i)=>rec[h]=parts[i]);
-
-    rec.id = Number(rec.id);
-    rec.x = Number(rec.x);
-    rec.y = Number(rec.y);
-    if (Number.isNaN(rec.id)) warnings.push(`Zeile ${rowIdx}: **id** ist keine Zahl.`);
-    if (Number.isNaN(rec.x) || Number.isNaN(rec.y)) warnings.push(`Zeile ${rowIdx}: **x/y** sind keine Zahlen.`);
-
-    rows.push(rec);
+    const p = splitSmart(line, delim);
+    const rec = {}; headers.forEach((h,i)=>rec[h]=p[i]);
+    rows.push({ id:Number(rec.id), x:Number(rec.x), y:Number(rec.y), halle:rec.halle||'' });
   }
-  return { headers, rows, warnings };
+  return { headers, rows };
 }
 
+function saveSites(){ localStorage.setItem(LS_KEYS.sites, JSON.stringify(state.sites)); }
+
+export function upsertSite(site){
+  // site: {id:number, x:number, y:number, halle?:string}
+  const id = Number(site.id);
+  if (!Number.isFinite(id)) return;
+  const idx = state.sites.findIndex(s=>Number(s.id)===id);
+  const clean = { id, x:Number(site.x), y:Number(site.y), halle: String(site.halle||'') };
+  if (idx>=0) state.sites[idx] = clean; else state.sites.push(clean);
+  saveSites();
+  bus.emit('sites:updated', { count: state.sites.length });
+}
+
+export function removeSite(id){
+  const n = Number(id);
+  const before = state.sites.length;
+  state.sites = state.sites.filter(s=>Number(s.id)!==n);
+  if (state.sites.length !== before){ saveSites(); bus.emit('sites:updated', { count: state.sites.length }); }
+}
+
+export function importSitesJSON(text){
+  let arr;
+  try{
+    const obj = JSON.parse(text);
+    arr = Array.isArray(obj) ? obj : (Array.isArray(obj.sites) ? obj.sites : []);
+  }catch(e){ state.warnings.sites = ['Standorte: Ungültiges JSON.']; bus.emit('warnings:update',{}); return ['Ungültiges JSON']; }
+  const cleaned = [];
+  for (const s of arr){
+    const id = Number(s.id), x = Number(s.x), y = Number(s.y);
+    if (!Number.isFinite(id) || !Number.isFinite(x) || !Number.isFinite(y)) continue;
+    cleaned.push({ id, x, y, halle: String(s.halle||'') });
+  }
+  state.sites = cleaned;
+  saveSites();
+  bus.emit('sites:updated', { count: state.sites.length });
+  return [];
+}
+
+export function exportSitesJSON(){
+  return new Blob([JSON.stringify(state.sites, null, 2)], {type:'application/json'});
+}
+
+/* ---------- Settings & Misc ---------- */
 export function migrateSettings(s){
   const out = { ...defaults.settings, ...s };
   if (!out.schema) out.schema = '1.0';
@@ -182,7 +211,6 @@ export function migrateSettings(s){
   return out;
 }
 
-// ---------- persistence helpers ----------
 export function importContainersCSV(text){
   const {rows, warnings} = parseContainersCSV(text);
   state.containers = rows;
@@ -192,26 +220,18 @@ export function importContainersCSV(text){
   bus.emit('warnings:update', {});
   return warnings;
 }
-export function importSitesCSV(text){
-  const {rows, warnings} = parseSitesCSV(text);
-  state.sites = rows;
-  state.warnings.sites = warnings;
-  localStorage.setItem(LS_KEYS.sites, text);
-  bus.emit('sites:updated', { count: rows.length, warnings });
-  bus.emit('warnings:update', {});
-  return warnings;
-}
 export function importSettingsJSON(text){
   const obj = migrateSettings(JSON.parse(text));
   state.settings = obj;
   state.warnings.settings = [];
-  featureFlags = obj.featureFlags || featureFlags;
+  if (obj.featureFlags) featureFlags = obj.featureFlags;
   saveFlags();
   localStorage.setItem(LS_KEYS.settings, JSON.stringify(obj));
   bus.emit('settings:updated', { obj });
   bus.emit('warnings:update', {});
 }
 
+/* Map & Start */
 export function setMapImage(dataUrl){
   state.mapImage = dataUrl;
   localStorage.setItem(LS_KEYS.mapImage, dataUrl);
@@ -236,18 +256,18 @@ export function pxToMeters(px){
   return px / ppm;
 }
 
-// ---------- Export ----------
+/* Export-All */
 export function exportAllJSON(){
   const out = {
     containers_csv: localStorage.getItem(LS_KEYS.containers)||'',
-    sites_csv: localStorage.getItem(LS_KEYS.sites)||'',
+    sites_json: JSON.stringify(state.sites),
     settings_json: localStorage.getItem(LS_KEYS.settings)||JSON.stringify(state.settings),
     map_image: localStorage.getItem(LS_KEYS.mapImage)||null
   };
   return new Blob([JSON.stringify(out, null, 2)], {type:'application/json'});
 }
 
-// ---------- Tour logs ----------
+/* Tour-Logs */
 export function appendTourLog(log){
   const key = LS_KEYS.tourLogs;
   let list = [];

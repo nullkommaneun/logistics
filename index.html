@@ -19,13 +19,12 @@
   <main id="main" class="layout">
     <section class="panel search-panel" aria-label="Suche und Eingabe">
       <label for="searchInput" class="visually-hidden">Behälter‑Nr. eingeben (6-stellig)</label>
-      <!-- numerische Eingabe -->
       <input id="searchInput" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="6"
              autocomplete="off" placeholder="Behälter‑Nr. (6-stellig)" aria-label="Behälternummer"/>
       <button id="addBtn" class="btn primary" aria-label="zur Tour hinzufügen">Hinzufügen</button>
       <div id="acList" class="autocomplete" role="listbox" aria-label="Vorschläge"></div>
 
-      <!-- 🔴 Klartext-Status dort, wo du markiert hast -->
+      <!-- Natürliche Klartext-Hinweise -->
       <div id="statusArea" class="status-area" aria-live="polite"></div>
 
       <p class="hint">Serieneingabe: <kbd>Enter</kbd> fügt hinzu. <strong>Nicht während der Fahrt bedienen.</strong></p>
@@ -51,15 +50,15 @@
             Plan laden
             <input type="file" id="planFile" accept="image/*" class="file-input" aria-label="Werksplan hochladen">
           </label>
-          <button id="btnUseSamplePlan" class="btn">Sample‑Plan</button>
           <button id="btnCalibrate" class="btn">Kalibrieren</button>
+          <button id="btnAddSite" class="btn">Standort+</button>
           <button id="btnSetStart" class="btn">Startpunkt</button>
         </div>
       </div>
       <div class="canvas-wrap">
         <canvas id="mapCanvas" width="1000" height="700" aria-label="Werksplan"></canvas>
 
-        <!-- Nicht-modales Meter-Overlay NACH 2 Punkten -->
+        <!-- Kalibrierungs-Overlay (nach zwei Punkten) -->
         <div id="calOverlay" class="cal-overlay" hidden>
           <div class="cal-card">
             <div class="cal-title">Kalibrierung</div>
@@ -70,6 +69,24 @@
             <div class="cal-actions">
               <button id="calOk" class="btn primary">Übernehmen</button>
               <button id="calCancel" class="btn">Abbrechen</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Standort-Overlay: Neu/Bearbeiten/Löschen -->
+        <div id="siteOverlay" class="site-overlay" hidden>
+          <div class="cal-card">
+            <div class="cal-title" id="siteOverlayTitle">Standort</div>
+            <div class="cal-body">
+              <label for="siteId">ID (1–999)</label>
+              <input id="siteId" type="number" min="1" max="999" placeholder="z. B. 11" />
+              <label for="siteName" style="margin-top:8px;">Name (optional)</label>
+              <input id="siteName" type="text" placeholder="Halle / Bereich" />
+            </div>
+            <div class="cal-actions">
+              <button id="siteSave" class="btn primary">Speichern</button>
+              <button id="siteDelete" class="btn danger">Löschen</button>
+              <button id="siteCancel" class="btn">Abbrechen</button>
             </div>
           </div>
         </div>
@@ -86,9 +103,10 @@
             <input id="fileContainers" class="file-input" type="file" accept=".csv,text/csv">
           </label>
           <label class="btn file">
-            CSV Standorte
-            <input id="fileSites" class="file-input" type="file" accept=".csv,text/csv">
+            JSON Standorte
+            <input id="fileSitesJson" class="file-input" type="file" accept=".json,application/json">
           </label>
+          <button id="exportSitesBtn" class="btn">Export Standorte</button>
           <label class="btn file">
             JSON Einstellungen
             <input id="fileSettings" class="file-input" type="file" accept=".json,application/json">

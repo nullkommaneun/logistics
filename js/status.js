@@ -1,9 +1,8 @@
-// Status-Engine: zeigt Klartext-Hinweise in Rot im #statusArea
 import { bus } from './bus.js';
 import { state } from './data.js';
 
 let areaEl;
-let volatileMsg = null; // temporäre Hinweise (z. B. "Kalibrierung aktiv …")
+let volatileMsg = null;
 
 export function initStatus(el){
   areaEl = el;
@@ -18,7 +17,6 @@ export function initStatus(el){
 
 function onAny(evt){
   if (evt === 'status:msg') {
-    // detail.text, detail.type ('info'|'error')
     const last = bus.getHistory().slice(-1)[0];
     volatileMsg = { type: last?.detail?.type || 'info', text: last?.detail?.text || '' };
   } else if (evt === 'status:clear') {
@@ -30,47 +28,46 @@ function onAny(evt){
 function evaluate(){
   const msgs = [];
 
-  // Temporäre Meldung ganz oben (z. B. während Kalibrierung)
-  if (volatileMsg && volatileMsg.text) {
-    msgs.push({type: 'error', text: volatileMsg.text});
+  if (volatileMsg && volatileMsg.text) { msgs.push({type:'error', text: volatileMsg.text}); }
+
+  if (!state.mapImage){
+    msgs.push({type:'error', text:'Noch kein Werksplan geladen. Tippe **„Plan laden“** und wähle ein Bild (PNG/JPG).'});
+  }
+  if (!state.settings?.px_per_meter){
+    msgs.push({type:'error', text:'Kalibrierung fehlt. Tippe **„Kalibrieren“**, markiere **zwei Punkte** und gib die Distanz in **Metern** ein.'});
+  }
+  if (!state.sites?.length){
+    msgs.push({type:'error', text:'Auf dem Plan sind noch **keine Standorte** gesetzt. Tippe **„Standort+“** und setze die Punkte dort, wo die Behälter stehen.'});
+  }
+  if (!state.start){
+    msgs.push({type:'error', text:'Startpunkt fehlt. Tippe **„Startpunkt“** und markiere deinen Start im Plan.'});
+  }
+  if (!state.containers?.length){
+    msgs.push({type:'error', text:'Es sind noch **keine Behälterdaten** geladen. Lade die Container‑CSV unter **Daten → CSV Container**.'});
   }
 
-  // Grundzustand
-  if (!state.containers || state.containers.length === 0){
-    msgs.push({type:'error', text:'Keine Behälterdaten gefunden. Lade unter **Daten → CSV Container** eine Komma‑CSV mit Header `typ,farbe,standort,flags,klasse,stapelbar,gewicht_kg`.'});
-  }
-  if (!state.sites || state.sites.length === 0){
-    msgs.push({type:'error', text:'Keine Standorte vorhanden. Lade **CSV Standorte** mit Spalten `id,x,y,halle,tags,kapazitaet,verbot_klassen`.'});
-  }
-
-  // Referenz-Validierung Container → Sites
+  // Container, die auf nicht vorhandene Standort-IDs verweisen
   if (state.sites?.length && state.containers?.length){
     const known = new Set(state.sites.map(s=>Number(s.id)));
     let invalid = 0;
     for (const c of state.containers){
-      if (c.standort!==undefined && c.standort!=='' && !known.has(Number(c.standort))) invalid++;
+      const ids = c.standorte?.length ? c.standorte : (Number.isFinite(c.standort)? [c.standort] : []);
+      if (!ids.length) continue;
+      const ok = ids.some(id => known.has(Number(id)));
+      if (!ok) invalid++;
     }
     if (invalid>0){
-      msgs.push({type:'error', text:`${invalid} Behälter verweisen auf unbekannte Standort‑IDs. Prüfe das Feld **standort** in \`containers.csv\` gegen \`sites.csv\`.`});
+      msgs.push({type:'error', text:`In der Containerliste verweisen **${invalid} Einträge** auf nicht vorhandene Standort‑IDs. Bitte IDs prüfen oder die passenden Standorte auf dem Plan setzen.`});
     }
   }
 
-  if (!state.mapImage){
-    msgs.push({type:'error', text:'Kein Plan geladen. Lade über **Plan laden** ein Werksplan‑Bild (PNG/JPG).'});
-  }
-  if (!state.settings?.px_per_meter){
-    msgs.push({type:'error', text:'Kalibrierung fehlt. Tippe **Kalibrieren**, markiere **2 Punkte** und gib die Distanz in **m** ein.'});
-  }
-  if (!state.start){
-    msgs.push({type:'error', text:'Startpunkt nicht gesetzt. Tippe **Startpunkt** und markiere den Start im Plan.'});
-  }
-  if (!state.cart?.length){
-    msgs.push({type:'error', text:'Keine Ziele in der Tourliste. Gib eine **6‑stellige Behälter‑Nr.** ein und füge sie hinzu.'});
-  }
-
-  // Import-Warnungen (in Rot, wie gewünscht)
-  for (const arr of [state.warnings?.containers||[], state.warnings?.sites||[], state.warnings?.settings||[]]){
-    for (const w of arr){ msgs.push({type:'error', text:String(w)}); }
+  // Import-Warnungen (Container)
+  for (const w of (state.warnings?.containers||[])){
+    if (String(w).includes('Semikolon')) {
+      msgs.push({type:'error', text:'Die Container‑Datei wirkt mit **Semikolons** exportiert. Besser: **Komma** als Trennzeichen.'});
+    } else {
+      msgs.push({type:'error', text:String(w)});
+    }
   }
 
   return msgs;
@@ -78,13 +75,8 @@ function evaluate(){
 
 function render(msgs){
   if (!areaEl) return;
-  if (!msgs || msgs.length===0){
-    areaEl.className = 'status-area';
-    areaEl.innerHTML = '';
-    return;
-  }
+  if (!msgs || msgs.length===0){ areaEl.className = 'status-area'; areaEl.innerHTML = ''; return; }
   areaEl.className = 'status-area error';
   areaEl.innerHTML = '<ul>'+ msgs.map(m=>'<li>'+escapeHtml(m.text)+'</li>').join('') +'</ul>';
 }
-
 function escapeHtml(s){ return String(s).replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }

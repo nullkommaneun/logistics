@@ -17,10 +17,9 @@ async function bootstrap(){
     const mapMod = await import('./map.js');
 
     dataMod.initFromLocalStorage();
-    await uiMod.initUI();          // ⚠️ neu: await, weil ui.js async ist
+    await uiMod.initUI();
     initPreflight(PF);
 
-    // Map wiring
     const canvas = document.getElementById('mapCanvas');
     mapMod.initMap(canvas);
 
@@ -32,16 +31,10 @@ async function bootstrap(){
         if (f) mapMod.loadPlanFromFile(f);
       });
     }
-    document.getElementById('btnUseSamplePlan').addEventListener('click', async ()=>{
-      try{
-        const res = await fetch('assets/sample-plan.png');
-        const blob = await res.blob();
-        const fr = new FileReader();
-        fr.onload = ()=>mapMod.usePlanDataUrl(fr.result);
-        fr.readAsDataURL(blob);
-      }catch(err){ panic('Sample-Plan konnte nicht geladen werden.'); }
-    });
+
+    // Kalibrieren / Standort / Start
     document.getElementById('btnCalibrate').addEventListener('click', ()=>mapMod.setModeCalibrate());
+    document.getElementById('btnAddSite').addEventListener('click', ()=>mapMod.setModeAddSite());
     document.getElementById('btnSetStart').addEventListener('click', ()=>mapMod.setModeStart());
 
     if (!dataMod.state.start && dataMod.state.sites.length){
@@ -76,7 +69,7 @@ async function bootstrap(){
 
     // Initiale Events
     bus.emit('containers:updated', {count: dataMod.state.containers.length, warnings: []});
-    bus.emit('sites:updated', {count: dataMod.state.sites.length, warnings: []});
+    bus.emit('sites:updated', {count: dataMod.state.sites.length});
     bus.emit('settings:updated', {obj: dataMod.state.settings});
   }catch(err){
     console.error(err);

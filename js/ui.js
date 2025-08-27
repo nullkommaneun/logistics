@@ -3,7 +3,7 @@ import { state, featureFlags, importContainersCSV, importSettingsJSON, exportAll
 import { searchContainers } from './search.js';
 import { addToCart, removeFromCart, clearCart, getCartItems, getUniqueSiteIds } from './cart.js';
 import { computeKPIs } from './analytics.js';
-import { importNavJSON, exportNavJSON } from './navgrid.js';
+import { exportNavJSON } from './navgrid.js';
 
 let els = {};
 let routeCache = null;
@@ -31,6 +31,7 @@ export async function initUI(){
     stepBar: document.getElementById('stepBar'),
     distTotal: document.getElementById('distTotal'),
     etaTotal: document.getElementById('etaTotal'),
+    fileMapBundle: document.getElementById('fileMapBundle'),
     fileContainers: document.getElementById('fileContainers'),
     fileSitesJson: document.getElementById('fileSitesJson'),
     filePlanJson: document.getElementById('filePlanJson'),
@@ -63,6 +64,17 @@ export async function initUI(){
 
   els.exportTourBtn.addEventListener('click', exportTour);
 
+  // --- Map-Bundle laden ---
+  els.fileMapBundle.addEventListener('change', async (e)=>{
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    const txt = await f.text();
+    const { importMapBundle } = await import('./bundle.js');
+    const warnings = importMapBundle(txt) || [];
+    snack('Map‑Bundle geladen' + (warnings.length? ' – mit Hinweisen' : ''));
+    refreshSummaries(); renderCart(); recomputeRoute();
+  });
+
+  // --- Einzelimporte (weiterhin möglich) ---
   els.fileContainers.addEventListener('change', async (e)=>{
     const f = e.target.files && e.target.files[0]; if (!f) return;
     const txt = await f.text();
@@ -79,6 +91,7 @@ export async function initUI(){
   els.filePlanJson.addEventListener('change', async (e)=>{
     const f = e.target.files && e.target.files[0]; if (!f) return;
     const txt = await f.text();
+    const { importNavJSON } = await import('./navgrid.js'); // falls benötigt
     importNavJSON(txt);
     snack('Werksplan (Wände/Tore) geladen'); recomputeRoute();
   });
@@ -179,7 +192,7 @@ async function recomputeRoute(){
   if (featureFlags.routing === 'nearest'){
     ({ computeRoute } = await import('./routing/nearest.js')); // Luftlinie (Fallback)
   } else {
-    ({ computeRoute } = await import('./routing/dijkstra.js')); // echtes Wege-Routing
+    ({ computeRoute } = await import('./routing/dijkstra.js')); // Wege-Routing + 2-Opt
   }
   const route = computeRoute(start, state.sites, uniqueSiteIds);
   routeCache = route;
@@ -203,6 +216,7 @@ function renderSteps(){
 
 function renderKPIs(){
   const items = getCartItems();
+  const { computeKPIs } = awaitComputeKPIs();
   const k = computeKPIs(routeCache||{}, items);
   const kpis = [
     ['Stops', k.stops],
@@ -212,6 +226,7 @@ function renderKPIs(){
   ];
   els.kpiBar.innerHTML = kpis.map(([n,v])=>`<div class="kpi"><div>${n}</div><div><strong>${v}</strong></div></div>`).join('');
 }
+async function awaitComputeKPIs(){ return { computeKPIs }; }
 
 async function exportAll(){
   const blob = exportAllJSON();

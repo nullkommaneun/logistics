@@ -18,7 +18,7 @@ export const defaults = {
     px_per_meter: null,
     speed_kmh_default: 7,
     hallen: {},
-    featureFlags: { routing:'dijkstra', capacity:'none', uiDensity:'comfort' }  // dijkstra ist Standard
+    featureFlags: { routing:'dijkstra', capacity:'none', uiDensity:'comfort' }
   },
   featureFlags: { routing:'dijkstra', capacity:'none', uiDensity:'comfort' }
 };
@@ -59,6 +59,14 @@ export function initFromLocalStorage(){
 }
 
 export function resetAll(){ Object.values(LS_KEYS).forEach(k => localStorage.removeItem(k)); }
+export function getLocalStorageSummary(){
+  const out = {};
+  for (let i=0;i<localStorage.length;i++){
+    const k = localStorage.key(i);
+    out[k] = (localStorage.getItem(k)||'').length + ' bytes';
+  }
+  return out;
+}
 export function dumpState(){
   return { containers: state.containers.slice(0,5).concat(state.containers.length>5?['…']:[]),
            sites: state.sites.slice(0,5).concat(state.sites.length>5?['…']:[]),

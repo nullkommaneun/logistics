@@ -1,13 +1,14 @@
-// NavGrid: Rasterbasierte Hindernis-Karte (Wände/Tore)
-// Speichert im localStorage; Dijkstra/A* nutzt dieses Raster.
+// NavGrid: Rasterbasierte Hindernisse (Wände/Sperrzonen) für Dijkstra/A*
+// Persistiert in localStorage.
 
 export const NAV_LS = 'bn_navgrid';
 
 export const nav = {
-  cell: 20,    // Pixel pro Zelle
+  cell: 20,       // Pixel pro Zelle
   cols: 50,
   rows: 35,
-  blocked: new Set() // 'cx_cy'
+  walls: new Set(), // 'cx_cy'
+  zones: new Set()  // 'cx_cy'
 };
 
 export function initNavGrid(width, height, cell=20){
@@ -19,41 +20,58 @@ export function initNavGrid(width, height, cell=20){
 export function loadNavGrid(){
   try{
     const obj = JSON.parse(localStorage.getItem(NAV_LS) || '{}');
-    if (obj && obj.blocked){
+    if (obj){
       nav.cell = obj.cell || nav.cell;
       nav.cols = obj.cols || nav.cols;
       nav.rows = obj.rows || nav.rows;
-      nav.blocked = new Set(obj.blocked);
-    } else {
-      nav.blocked = new Set();
+      if (obj.blocked && !obj.walls && !obj.zones){
+        nav.walls = new Set(obj.blocked);
+        nav.zones = new Set();
+      } else {
+        nav.walls = new Set(obj.walls || []);
+        nav.zones = new Set(obj.zones || []);
+      }
     }
-  }catch{ nav.blocked = new Set(); }
+  }catch{ nav.walls = new Set(); nav.zones = new Set(); }
 }
 export function saveNavGrid(){
-  const obj = { cell: nav.cell, cols: nav.cols, rows: nav.rows, blocked: Array.from(nav.blocked) };
+  const obj = { cell: nav.cell, cols: nav.cols, rows: nav.rows,
+                walls: Array.from(nav.walls), zones: Array.from(nav.zones) };
   localStorage.setItem(NAV_LS, JSON.stringify(obj));
 }
 
 export function importNavJSON(text){
   let o = JSON.parse(text);
-  if (Array.isArray(o)) o = { blocked:o };
+  if (Array.isArray(o)) o = { walls:o, zones:[] };
   nav.cell = Number(o.cell)||nav.cell;
   nav.cols = Number(o.cols)||nav.cols;
   nav.rows = Number(o.rows)||nav.rows;
-  nav.blocked = new Set(o.blocked||[]);
+  nav.walls = new Set(o.walls||[]);
+  nav.zones = new Set(o.zones||[]);
   saveNavGrid();
 }
 export function exportNavJSON(){
-  const obj = { cell: nav.cell, cols: nav.cols, rows: nav.rows, blocked: Array.from(nav.blocked) };
+  const obj = { cell: nav.cell, cols: nav.cols, rows: nav.rows,
+                walls: Array.from(nav.walls), zones: Array.from(nav.zones) };
   return new Blob([JSON.stringify(obj, null, 2)], {type:'application/json'});
 }
 
 export function cellKey(cx,cy){ return cx+'_'+cy; }
-export function isBlocked(cx,cy){ return nav.blocked.has(cellKey(cx,cy)); }
-export function setBlocked(cx,cy, val=true){
+export function isBlocked(cx,cy){ return nav.walls.has(cellKey(cx,cy)) || nav.zones.has(cellKey(cx,cy)); }
+
+export function setWall(cx,cy, val=true){
   if (cx<0||cy<0||cx>=nav.cols||cy>=nav.rows) return;
   const key = cellKey(cx,cy);
-  if (val) nav.blocked.add(key); else nav.blocked.delete(key);
+  if (val) nav.walls.add(key); else nav.walls.delete(key);
+}
+export function setZone(cx,cy, val=true){
+  if (cx<0||cy<0||cx>=nav.cols||cy>=nav.rows) return;
+  const key = cellKey(cx,cy);
+  if (val) nav.zones.add(key); else nav.zones.delete(key);
+}
+export function clearCell(cx,cy){
+  const key = cellKey(cx,cy);
+  nav.walls.delete(key); nav.zones.delete(key);
 }
 
 export function toCell(x,y){
@@ -64,8 +82,8 @@ export function toCell(x,y){
 }
 export function cellCenter(cx,cy){ return { x: cx*nav.cell + nav.cell/2, y: cy*nav.cell + nav.cell/2 }; }
 
-export function brushCellsBetween(ax,ay,bx,by, brush=1, block=true){
-  // Zeichnet eine "Linie" im Raster; brush=Radius in Zellen
+// Linie „malen“; brush=Radius in Zellen; type: 'wall' | 'zone' | 'clear'
+export function brushCellsBetween(ax,ay,bx,by, brush=1, type='wall'){
   const A = toCell(ax,ay), B = toCell(bx,by);
   let x0=A.cx, y0=A.cy, x1=B.cx, y1=B.cy;
   const dx = Math.abs(x1-x0), dy = Math.abs(y1-y0);
@@ -74,7 +92,10 @@ export function brushCellsBetween(ax,ay,bx,by, brush=1, block=true){
   while(true){
     for(let ox=-brush; ox<=brush; ox++){
       for(let oy=-brush; oy<=brush; oy++){
-        setBlocked(x0+ox, y0+oy, block);
+        const cx=x0+ox, cy=y0+oy;
+        if (type==='clear') clearCell(cx,cy);
+        else if (type==='zone') setZone(cx,cy,true);
+        else setWall(cx,cy,true);
       }
     }
     if (x0===x1 && y0===y1) break;
@@ -141,7 +162,7 @@ export function pathfind(x0,y0,x1,y1){
       if (!dist.has(vKey) || alt<dist.get(vKey)){
         dist.set(vKey, alt);
         prev.set(vKey, uKey);
-        if (!visited.has(vKey)) frontier.push({cx:nb.cx, cy:nb.cy});
+        if (!visited.has(vKey)) frontier.push({cx:nb.cx,cy:nb.cy});
       }
     }
   }

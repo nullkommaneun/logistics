@@ -36,8 +36,12 @@ async function bootstrap(){
     document.getElementById('btnCalibrate').addEventListener('click', ()=>mapMod.setModeCalibrate());
     document.getElementById('btnAddSite').addEventListener('click', ()=>mapMod.setModeAddSite());
     document.getElementById('btnWalls').addEventListener('click', ()=>mapMod.setModeWalls());
+    document.getElementById('btnZone').addEventListener('click', ()=>mapMod.setModeZone());
     document.getElementById('btnDoor').addEventListener('click', ()=>mapMod.setModeDoor());
     document.getElementById('btnSetStart').addEventListener('click', ()=>mapMod.setModeStart());
+    document.getElementById('btnZoomIn').addEventListener('click', ()=>mapMod.zoomIn());
+    document.getElementById('btnZoomOut').addEventListener('click', ()=>mapMod.zoomOut());
+    document.getElementById('btnZoomReset').addEventListener('click', ()=>mapMod.zoomReset());
 
     if (!dataMod.state.start && dataMod.state.sites.length){
       dataMod.setStartPointFromSite(dataMod.state.sites[0].id);

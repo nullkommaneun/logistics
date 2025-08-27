@@ -1,4 +1,4 @@
-const SW_VERSION = 'bn-v1.2.0'; // neue Version für Wege-Raster & Dijkstra
+const SW_VERSION = 'bn-v1.3.0'; // neue Version (Sperrzonen, 2-Opt, Zoom)
 
 const CORE = [
   'index.html',

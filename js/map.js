@@ -5,10 +5,15 @@ import { nav, initNavGrid, saveNavGrid, brushCellsBetween, isBlocked } from './n
 let canvas, ctx;
 let img = null;
 
-let mode = 'idle'; // 'idle' | 'calibrate' | 'start' | 'addSite' | 'walls' | 'door'
+let mode = 'idle'; // 'idle' | 'calibrate' | 'start' | 'addSite' | 'walls' | 'zone' | 'door'
 let calPoints = []; // {x,y}
 let drawing = false;
 let lastPt = null;
+
+// Zoom & Pan
+let scale = 1, offsetX = 0, offsetY = 0;
+let panning = false;
+let panStart = null, panOffset0 = null;
 
 let pendingSite = null; // {x,y, existing?:site}
 
@@ -23,6 +28,14 @@ export function initMap(canvasEl){
   canvas.addEventListener('pointermove', onPointerMove);
   window.addEventListener('pointerup', onPointerUp);
 
+  // Rad-Zoom (Desktop)
+  canvas.addEventListener('wheel', onWheel, { passive:false });
+
+  // iOS: Pinch-Zoom der Seite sicher unterbinden
+  ['gesturestart','gesturechange','gestureend'].forEach(ev =>
+    document.addEventListener(ev, e => e.preventDefault())
+  );
+
   bus.on('map:image', draw);
   bus.on('sites:updated', draw);
   bus.on('start:changed', draw);
@@ -34,14 +47,16 @@ export function initMap(canvasEl){
   document.getElementById('siteCancel').onclick = closeSiteOverlay;
 }
 
-function canvasToLocal(ev){
+function canvasToScreen(ev){
   const rect = canvas.getBoundingClientRect();
-  const x = (ev.clientX - rect.left) * (canvas.width / rect.width);
-  const y = (ev.clientY - rect.top) * (canvas.height / rect.height);
-  return {x,y};
+  return {
+    x: (ev.clientX - rect.left) * (canvas.width / rect.width),
+    y: (ev.clientY - rect.top) * (canvas.height / rect.height)
+  };
 }
+function screenToWorld(p){ return { x:(p.x - offsetX)/scale, y:(p.y - offsetY)/scale }; }
 
-function findSiteNear(x,y, r=10){
+function findSiteNearWorld(x,y, r=10){
   let best=null, bestd=1e9;
   for (const s of state.sites){
     const d = Math.hypot(x-s.x, y-s.y);
@@ -51,10 +66,11 @@ function findSiteNear(x,y, r=10){
 }
 
 function onPointerDown(ev){
-  const {x,y} = canvasToLocal(ev);
+  const pScreen = canvasToScreen(ev);
+  const p = screenToWorld(pScreen);
 
   if (mode === 'calibrate'){
-    calPoints.push({x,y});
+    calPoints.push(p);
     if (calPoints.length === 1){
       bus.emit('status:msg', {type:'info', text:'Kalibrierung aktiv: Punkt 1 gesetzt. Tippe **Punkt 2**.'});
     }
@@ -90,7 +106,7 @@ function onPointerDown(ev){
   }
 
   if (mode === 'start'){
-    setStartPoint(x,y);
+    setStartPoint(p.x,p.y);
     mode = 'idle';
     draw();
     bus.emit('status:msg', {type:'info', text:'Startpunkt gesetzt.'});
@@ -99,38 +115,73 @@ function onPointerDown(ev){
   }
 
   if (mode === 'addSite'){
-    pendingSite = { x, y, existing: null };
+    pendingSite = { x: p.x, y: p.y, existing: null };
     openSiteOverlay({ id: nextFreeId(), name:'', isNew:true });
     return;
   }
 
-  if (mode === 'walls' || mode === 'door'){
+  if (mode === 'walls' || mode === 'door' || mode === 'zone'){
     drawing = true;
-    lastPt = {x,y};
-    applyBrush(x,y);
+    lastPt = {x:p.x,y:p.y};
+    applyBrush(p.x,p.y);
     return;
   }
 
-  // idle: Tippen auf vorhandenen Standort -> bearbeiten
-  const near = findSiteNear(x,y, 12);
+  // idle: Pan oder Standort bearbeiten
+  const near = findSiteNearWorld(p.x,p.y, 12);
   if (near){
     pendingSite = { x: near.x, y: near.y, existing: near };
     openSiteOverlay({ id: near.id, name: near.halle||'', isNew:false });
+  } else {
+    panning = true;
+    panStart = pScreen;
+    panOffset0 = { x: offsetX, y: offsetY };
   }
 }
 function onPointerMove(ev){
-  if (!drawing) return;
-  const {x,y} = canvasToLocal(ev);
-  applyBrush(x,y);
+  const pScreen = canvasToScreen(ev);
+  const p = screenToWorld(pScreen);
+  if (drawing){
+    applyBrush(p.x,p.y);
+    return;
+  }
+  if (panning && panStart){
+    const dx = pScreen.x - panStart.x;
+    const dy = pScreen.y - panStart.y;
+    offsetX = panOffset0.x + dx;
+    offsetY = panOffset0.y + dy;
+    draw();
+  }
 }
 function onPointerUp(){ 
   if (drawing){ drawing=false; saveNavGrid(); }
+  panning = false; panStart = null; panOffset0 = null;
 }
+
+function onWheel(e){
+  e.preventDefault();
+  const pScreen = canvasToScreen(e);
+  const world = screenToWorld(pScreen);
+  const factor = (e.deltaY < 0) ? 1.12 : 0.89;
+  zoomAt(world.x, world.y, factor);
+}
+function zoomAt(wx, wy, factor){
+  const newScale = Math.max(0.5, Math.min(4, scale * factor));
+  const sx = wx * scale + offsetX, sy = wy * scale + offsetY;
+  scale = newScale;
+  offsetX = sx - wx * scale;
+  offsetY = sy - wy * scale;
+  draw();
+}
+export function zoomIn(){ zoomAt(canvas.width/2, canvas.height/2, 1.12); }
+export function zoomOut(){ zoomAt(canvas.width/2, canvas.height/2, 0.89); }
+export function zoomReset(){ scale = 1; offsetX = 0; offsetY = 0; draw(); }
 
 function applyBrush(x,y){
   if (!lastPt){ lastPt={x,y}; }
-  const block = (mode==='walls');
-  brushCellsBetween(lastPt.x, lastPt.y, x, y, 1, block);
+  const type = (mode==='door') ? 'clear' : (mode==='zone' ? 'zone' : 'wall');
+  const brush = (mode==='zone') ? 3 : 1;
+  brushCellsBetween(lastPt.x, lastPt.y, x, y, brush, type);
   lastPt = {x,y};
   draw();
 }
@@ -171,14 +222,11 @@ function onSiteDelete(){
 }
 
 /* ---- Modus-Schalter ---- */
-export function setModeCalibrate(){
-  mode='calibrate'; calPoints = [];
-  bus.emit('status:msg', {type:'info', text:'Kalibrierung aktiv: tippe **Punkt 1**.'});
-  draw();
-}
+export function setModeCalibrate(){ mode='calibrate'; calPoints = []; bus.emit('status:msg', {type:'info', text:'Kalibrierung aktiv: tippe **Punkt 1**.'}); draw(); }
 export function setModeStart(){ mode='start'; bus.emit('status:msg',{type:'info', text:'Startpunkt wählen: tippe den Start im Plan.'}); draw(); }
 export function setModeAddSite(){ mode='addSite'; bus.emit('status:msg',{type:'info', text:'Standort hinzufügen: tippe die gewünschte Position im Plan.'}); draw(); }
 export function setModeWalls(){ mode='walls'; bus.emit('status:msg',{type:'info', text:'Wände zeichnen: über den Korridoren **nicht** zeichnen.'}); draw(); }
+export function setModeZone(){ mode='zone'; bus.emit('status:msg',{type:'info', text:'Sperrzone zeichnen: Fläche großzügig ausmalen.'}); draw(); }
 export function setModeDoor(){ mode='door'; bus.emit('status:msg',{type:'info', text:'Tor (Öffnung) ziehen: gesperrte Zellen wieder freigeben.'}); draw(); }
 
 /* ---- Zeichnen ---- */
@@ -192,29 +240,38 @@ export function usePlanDataUrl(dataUrl){
 }
 
 export function draw(){
+  // Bildschirm zurücksetzen
+  ctx.setTransform(1,0,0,1,0,0);
   ctx.fillStyle = '#0a0f16';
   ctx.fillRect(0,0,canvas.width,canvas.height);
 
+  // Welt-Transform
+  ctx.save();
+  ctx.setTransform(scale,0,0,scale, offsetX, offsetY);
+
   // Hintergrundbild (optional)
   if (!img && state.mapImage){
-    img = new Image(); img.onload = ()=>{ draw(); }; img.src = state.mapImage; return;
+    img = new Image(); img.onload = ()=>{ draw(); }; img.src = state.mapImage; 
   }
   if (img){ ctx.drawImage(img, 0,0,canvas.width,canvas.height); }
 
-  // Raster/Blocked
-  // Zellen leicht andeuten
+  // Raster
   ctx.strokeStyle = '#132033'; ctx.lineWidth = 1;
   for (let x=0; x<canvas.width; x+=20){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); ctx.stroke(); }
   for (let y=0; y<canvas.height; y+=20){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); ctx.stroke(); }
 
-  // Blockierte Zellen rot
+  // Gesperrte Zellen (Wände rot, Zonen gelb)
+  // Wände
   ctx.fillStyle = 'rgba(255,80,80,.28)';
-  for (let cx=0; cx<nav.cols; cx++){
-    for (let cy=0; cy<nav.rows; cy++){
-      if (isBlocked(cx,cy)){
-        ctx.fillRect(cx*nav.cell, cy*nav.cell, nav.cell, nav.cell);
-      }
-    }
+  for (const key of nav.walls){
+    const [cx,cy] = key.split('_').map(Number);
+    ctx.fillRect(cx*nav.cell, cy*nav.cell, nav.cell, nav.cell);
+  }
+  // Zonen
+  ctx.fillStyle = 'rgba(255,206,86,.28)';
+  for (const key of nav.zones){
+    const [cx,cy] = key.split('_').map(Number);
+    ctx.fillRect(cx*nav.cell, cy*nav.cell, nav.cell, nav.cell);
   }
 
   // Standorte
@@ -236,12 +293,16 @@ export function draw(){
     ctx.fillStyle = '#f6c177';
     calPoints.forEach(p=>drawDot(p.x,p.y,6));
   }
+
+  ctx.restore(); // Welt-Transform Ende
 }
 function drawDot(x,y,r){ ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); }
 
 function drawRoute(route){
   draw();
   if (!route || !route.steps?.length) return;
+  ctx.save();
+  ctx.setTransform(scale,0,0,scale, offsetX, offsetY);
   ctx.strokeStyle = '#a4b9ff'; ctx.lineWidth = 2;
   for (const step of route.steps){
     if (Array.isArray(step.path) && step.path.length>1){
@@ -251,4 +312,5 @@ function drawRoute(route){
       ctx.stroke();
     }
   }
+  ctx.restore();
 }

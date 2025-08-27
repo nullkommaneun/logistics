@@ -2,7 +2,8 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- iOS: Seite zoomt nicht durch Doppeltap/Pinch -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#0b0f14">
   <title>Behälter‑Navigator</title>
   <link rel="manifest" href="manifest.webmanifest">
@@ -53,8 +54,12 @@
           <button id="btnCalibrate" class="btn">Kalibrieren</button>
           <button id="btnAddSite" class="btn">Standort+</button>
           <button id="btnWalls" class="btn">Wände</button>
+          <button id="btnZone" class="btn">Sperrzone</button>
           <button id="btnDoor" class="btn">Tor (Öffnung)</button>
           <button id="btnSetStart" class="btn">Startpunkt</button>
+          <button id="btnZoomIn" class="btn">Zoom&nbsp;+</button>
+          <button id="btnZoomOut" class="btn">Zoom&nbsp;−</button>
+          <button id="btnZoomReset" class="btn">1:1</button>
         </div>
       </div>
       <div class="canvas-wrap">

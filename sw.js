@@ -1,4 +1,4 @@
-const SW_VERSION = 'bn-v1.3.0'; // neue Version (Sperrzonen, 2-Opt, Zoom)
+const SW_VERSION = 'bn-v1.3.1'; // Rechteck-Zeichnen + 10px Raster
 
 const CORE = [
   'index.html',

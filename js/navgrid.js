@@ -4,19 +4,20 @@
 export const NAV_LS = 'bn_navgrid';
 
 export const nav = {
-  cell: 20,       // Pixel pro Zelle
+  cell: 10,       // Pixel pro Zelle (fein)
   cols: 50,
   rows: 35,
   walls: new Set(), // 'cx_cy'
   zones: new Set()  // 'cx_cy'
 };
 
-export function initNavGrid(width, height, cell=20){
+export function initNavGrid(width, height, cell=10){
   nav.cell = cell;
   nav.cols = Math.max(4, Math.floor(width / cell));
   nav.rows = Math.max(4, Math.floor(height / cell));
   loadNavGrid();
 }
+
 export function loadNavGrid(){
   try{
     const obj = JSON.parse(localStorage.getItem(NAV_LS) || '{}');
@@ -25,6 +26,7 @@ export function loadNavGrid(){
       nav.cols = obj.cols || nav.cols;
       nav.rows = obj.rows || nav.rows;
       if (obj.blocked && !obj.walls && !obj.zones){
+        // Legacy (nur "blocked")
         nav.walls = new Set(obj.blocked);
         nav.zones = new Set();
       } else {
@@ -32,8 +34,12 @@ export function loadNavGrid(){
         nav.zones = new Set(obj.zones || []);
       }
     }
-  }catch{ nav.walls = new Set(); nav.zones = new Set(); }
+  }catch{
+    nav.walls = new Set();
+    nav.zones = new Set();
+  }
 }
+
 export function saveNavGrid(){
   const obj = { cell: nav.cell, cols: nav.cols, rows: nav.rows,
                 walls: Array.from(nav.walls), zones: Array.from(nav.zones) };
@@ -82,29 +88,21 @@ export function toCell(x,y){
 }
 export function cellCenter(cx,cy){ return { x: cx*nav.cell + nav.cell/2, y: cy*nav.cell + nav.cell/2 }; }
 
-// Linie „malen“; brush=Radius in Zellen; type: 'wall' | 'zone' | 'clear'
-export function brushCellsBetween(ax,ay,bx,by, brush=1, type='wall'){
+// Rechteck zellgenau füllen; type: 'wall' | 'zone' | 'clear'
+export function fillRectCells(ax,ay,bx,by,type='wall'){
   const A = toCell(ax,ay), B = toCell(bx,by);
-  let x0=A.cx, y0=A.cy, x1=B.cx, y1=B.cy;
-  const dx = Math.abs(x1-x0), dy = Math.abs(y1-y0);
-  const sx = x0<x1?1:-1, sy = y0<y1?1:-1;
-  let err = dx - dy;
-  while(true){
-    for(let ox=-brush; ox<=brush; ox++){
-      for(let oy=-brush; oy<=brush; oy++){
-        const cx=x0+ox, cy=y0+oy;
-        if (type==='clear') clearCell(cx,cy);
-        else if (type==='zone') setZone(cx,cy,true);
-        else setWall(cx,cy,true);
-      }
+  const x0 = Math.min(A.cx,B.cx), x1 = Math.max(A.cx,B.cx);
+  const y0 = Math.min(A.cy,B.cy), y1 = Math.max(A.cy,B.cy);
+  for (let cx=x0; cx<=x1; cx++){
+    for (let cy=y0; cy<=y1; cy++){
+      if (type==='clear') clearCell(cx,cy);
+      else if (type==='zone') setZone(cx,cy,true);
+      else setWall(cx,cy,true);
     }
-    if (x0===x1 && y0===y1) break;
-    const e2 = 2*err;
-    if (e2 > -dy){ err -= dy; x0 += sx; }
-    if (e2 < dx){ err += dx; y0 += sy; }
   }
 }
 
+// Nachbarn für Dijkstra
 export function neighbors(cx,cy){
   const res=[];
   for (let dx=-1; dx<=1; dx++){
@@ -118,6 +116,7 @@ export function neighbors(cx,cy){
   }
   return res;
 }
+
 export function nearestOpenCell(cx,cy,maxR=6){
   if (!isBlocked(cx,cy)) return {cx,cy};
   for(let r=1; r<=maxR; r++){

@@ -1,4 +1,4 @@
-const SW_VERSION = 'bn-v1.3.3'; // + Map-Bundle-Import
+const SW_VERSION = 'bn-v1.4.1'; // Fix: computeKPIs statisch importiert
 
 const CORE = [
   'index.html',
@@ -14,7 +14,7 @@ const CORE = [
   'js/analytics.js',
   'js/status.js',
   'js/navgrid.js',
-  'js/bundle.js',            // <— neu
+  'js/bundle.js',
   'js/routing/nearest.js',
   'js/routing/dijkstra.js',
   'js/capacity/none.js',

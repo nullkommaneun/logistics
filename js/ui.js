@@ -1,9 +1,8 @@
 import { bus } from './bus.js';
-import { state, featureFlags, importContainersCSV, importSettingsJSON, exportAllJSON, importSitesJSON, exportSitesJSON } from './data.js';
+import { state, featureFlags, importContainersCSV, importSettingsJSON, exportAllJSON } from './data.js';
 import { searchContainers } from './search.js';
 import { addToCart, removeFromCart, clearCart, getCartItems, getUniqueSiteIds } from './cart.js';
-import { computeKPIs } from './analytics.js';          // ✅ statischer, sicherer Import
-import { exportNavJSON } from './navgrid.js';
+import { computeKPIs } from './analytics.js';
 
 let els = {};
 let routeCache = null;
@@ -31,13 +30,9 @@ export async function initUI(){
     stepBar: document.getElementById('stepBar'),
     distTotal: document.getElementById('distTotal'),
     etaTotal: document.getElementById('etaTotal'),
-    fileMapBundle: document.getElementById('fileMapBundle'), // optional je nach HTML
+    fileMapBundle: document.getElementById('fileMapBundle'),
     fileContainers: document.getElementById('fileContainers'),
-    fileSitesJson: document.getElementById('fileSitesJson'),
-    filePlanJson: document.getElementById('filePlanJson'),
-    exportPlanBtn: document.getElementById('exportPlanBtn'),
     fileSettings: document.getElementById('fileSettings'),
-    exportSitesBtn: document.getElementById('exportSitesBtn'),
     exportAllBtn: document.getElementById('exportAllBtn'),
     resetBtn: document.getElementById('resetBtn'),
     sumContainers: document.getElementById('sumContainers'),
@@ -49,85 +44,52 @@ export async function initUI(){
     statusArea: document.getElementById('statusArea')
   };
 
-  // Klartext-Status (fehlerresistent laden)
   try { (await import('./status.js')).initStatus(els.statusArea); }
   catch (e) { console.warn('status.js fehlt – weiter ohne Klartext-Status.', e); }
 
+  // Suche
   els.searchInput.addEventListener('input', onSearchInput);
   els.searchInput.addEventListener('keydown', (e)=>{ if (e.key === 'Enter'){ tryAddTopOrExact(); } });
   els.addBtn.addEventListener('click', tryAddTopOrExact);
 
+  // Tourliste
   els.cartList.addEventListener('click', (e)=>{
     const li = e.target.closest('li[data-nr]'); if (!li) return;
     if (e.target.matches('button.remove')){ removeFromCart(li.dataset.nr); }
   });
   els.clearCartBtn.addEventListener('click', ()=>{ clearCart(); });
-
   els.exportTourBtn.addEventListener('click', exportTour);
 
-  // --- Map-Bundle laden (falls vorhanden) ---
-  if (els.fileMapBundle){
-    els.fileMapBundle.addEventListener('change', async (e)=>{
-      const f = e.target.files && e.target.files[0]; if (!f) return;
-      const txt = await f.text();
-      const { importMapBundle } = await import('./bundle.js');
-      const warnings = importMapBundle(txt) || [];
-      snack('Map-Bundle geladen' + (warnings.length? ' – mit Hinweisen' : ''));
-      refreshSummaries(); renderCart(); recomputeRoute();
-    });
-  }
+  // Map‑Bundle
+  els.fileMapBundle.addEventListener('change', async (e)=>{
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    const txt = await f.text();
+    const { importMapBundle } = await import('./bundle.js');
+    const warnings = importMapBundle(txt) || [];
+    snack('Map‑Bundle geladen' + (warnings.length? ' – mit Hinweisen' : ''));
+    refreshSummaries(); renderCart(); recomputeRoute();
+  });
 
-  // --- Einzelimporte (weiterhin möglich) ---
-  if (els.fileContainers){
-    els.fileContainers.addEventListener('change', async (e)=>{
-      const f = e.target.files && e.target.files[0]; if (!f) return;
-      const txt = await f.text();
-      const warnings = importContainersCSV(txt);
-      snack('Container importiert' + (warnings.length? ' – Warnungen vorhanden': ''));
-      refreshSummaries(); renderCart(); recomputeRoute();
-    });
-  }
-  if (els.fileSitesJson){
-    els.fileSitesJson.addEventListener('change', async (e)=>{
-      const f = e.target.files && e.target.files[0]; if (!f) return;
-      const txt = await f.text();
-      importSitesJSON(txt);
-      snack('Standorte geladen'); refreshSummaries(); recomputeRoute();
-    });
-  }
-  if (els.filePlanJson){
-    els.filePlanJson.addEventListener('change', async (e)=>{
-      const f = e.target.files && e.target.files[0]; if (!f) return;
-      const txt = await f.text();
-      const { importNavJSON } = await import('./navgrid.js'); // optional
-      importNavJSON(txt);
-      snack('Werksplan (Wände/Tore) geladen'); recomputeRoute();
-    });
-  }
-  if (els.exportPlanBtn){
-    els.exportPlanBtn.addEventListener('click', ()=>{
-      const blob = exportNavJSON(); const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = 'bn-werksplan.json'; a.click(); URL.revokeObjectURL(url);
-    });
-  }
-  if (els.exportSitesBtn){
-    els.exportSitesBtn.addEventListener('click', ()=>{
-      const blob = exportSitesJSON(); const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = 'bn-sites.json'; a.click(); URL.revokeObjectURL(url);
-    });
-  }
-  if (els.fileSettings){
-    els.fileSettings.addEventListener('change', async (e)=>{
-      const f = e.target.files && e.target.files[0]; if (!f) return;
-      const txt = await f.text();
-      importSettingsJSON(txt);
-      snack('Einstellungen geladen'); refreshSummaries(); recomputeRoute();
-    });
-  }
+  // Container & Settings
+  els.fileContainers.addEventListener('change', async (e)=>{
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    const txt = await f.text();
+    const warnings = importContainersCSV(txt);
+    snack('Container importiert' + (warnings.length? ' – Warnungen vorhanden': ''));
+    refreshSummaries(); renderCart(); recomputeRoute();
+  });
+  els.fileSettings.addEventListener('change', async (e)=>{
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    const txt = await f.text();
+    importSettingsJSON(txt);
+    snack('Einstellungen geladen'); refreshSummaries(); recomputeRoute();
+  });
 
-  if (els.exportAllBtn) els.exportAllBtn.addEventListener('click', exportAll);
-  if (els.resetBtn) els.resetBtn.addEventListener('click', ()=>{ if(confirm('Alle lokalen Daten löschen?')){ localStorage.clear(); location.reload(); } });
+  // Export / Reset
+  els.exportAllBtn.addEventListener('click', exportAll);
+  els.resetBtn.addEventListener('click', ()=>{ if(confirm('Alle lokalen Daten löschen?')){ localStorage.clear(); location.reload(); } });
 
+  // Events
   bus.on('cart:changed', ()=>{ renderCart(); recomputeRoute(); });
   bus.on('containers:updated', refreshSummaries);
   bus.on('sites:updated', ()=>{ refreshSummaries(); renderCart(); recomputeRoute(); });
@@ -205,7 +167,7 @@ async function recomputeRoute(){
   const start = { x: state.start.x, y: state.start.y, label: state.start.label };
   let computeRoute;
   if (featureFlags.routing === 'nearest'){
-    ({ computeRoute } = await import('./routing/nearest.js')); // Luftlinie (Fallback)
+    ({ computeRoute } = await import('./routing/nearest.js')); // Fallback Linien-Luft
   } else {
     ({ computeRoute } = await import('./routing/dijkstra.js')); // Wege-Routing + 2-Opt
   }
@@ -231,7 +193,7 @@ function renderSteps(){
 
 function renderKPIs(){
   const items = getCartItems();
-  const k = computeKPIs(routeCache||{}, items);    // ✅ sicherer Funktionsaufruf
+  const k = computeKPIs(routeCache||{}, items);
   const kpis = [
     ['Stops', k.stops],
     ['Behälter', k.behaelter],

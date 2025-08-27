@@ -17,16 +17,19 @@
   </header>
 
   <main id="main" class="layout">
+    <!-- Suche / Eingabe -->
     <section class="panel search-panel" aria-label="Suche und Eingabe">
-      <label for="searchInput" class="visually-hidden">Behälter‑Nr. eingeben (6-stellig)</label>
+      <label for="searchInput" class="visually-hidden">Behälter‑Nr. (6-stellig)</label>
       <input id="searchInput" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="6"
              autocomplete="off" placeholder="Behälter‑Nr. (6-stellig)" aria-label="Behälternummer"/>
       <button id="addBtn" class="btn primary" aria-label="zur Tour hinzufügen">Hinzufügen</button>
       <div id="acList" class="autocomplete" role="listbox" aria-label="Vorschläge"></div>
+
       <div id="statusArea" class="status-area" aria-live="polite"></div>
       <p class="hint">Serieneingabe: <kbd>Enter</kbd> fügt hinzu. <strong>Nicht während der Fahrt bedienen.</strong></p>
     </section>
 
+    <!-- Tourliste -->
     <section class="panel cart-panel" aria-label="Tourliste">
       <div class="panel-header">
         <h2>Tourliste</h2>
@@ -39,86 +42,38 @@
       <div id="kpiBar" class="kpis" aria-live="polite"></div>
     </section>
 
-    <section class="panel map-panel" aria-label="Karte & Wegeplan">
+    <!-- Karte (nur Bundle laden, Startpunkt, Zoom) -->
+    <section class="panel map-panel" aria-label="Karte">
       <div class="panel-header">
         <h2>Karte</h2>
         <div class="actions">
           <label class="btn file">
-            Plan laden
-            <input type="file" id="planFile" accept="image/*" class="file-input" aria-label="Werksplan-Bild (optional)">
+            Map‑Bundle laden
+            <input id="fileMapBundle" class="file-input" type="file" accept=".json,application/json" aria-label="Map-Bundle JSON">
           </label>
-          <button id="btnCalibrate" class="btn">Kalibrieren</button>
-          <button id="btnAddSite" class="btn">Standort+</button>
-          <button id="btnWalls" class="btn">Wände</button>
-          <button id="btnZone" class="btn">Sperrzone</button>
-          <button id="btnDoor" class="btn">Tor (Öffnung)</button>
           <button id="btnSetStart" class="btn">Startpunkt</button>
           <button id="btnZoomIn" class="btn">Zoom&nbsp;+</button>
           <button id="btnZoomOut" class="btn">Zoom&nbsp;−</button>
           <button id="btnZoomReset" class="btn">1:1</button>
         </div>
       </div>
+
       <div class="canvas-wrap">
         <canvas id="mapCanvas" width="1000" height="700" aria-label="Werksplan"></canvas>
-
-        <!-- Kalibrierung -->
-        <div id="calOverlay" class="cal-overlay" hidden>
-          <div class="cal-card">
-            <div class="cal-title">Kalibrierung</div>
-            <div class="cal-body">
-              <p>Distanz zwischen den zwei gewählten Punkten in Metern eingeben:</p>
-              <input id="calMeters" type="number" min="0" step="0.1" placeholder="Meter" />
-            </div>
-            <div class="cal-actions">
-              <button id="calOk" class="btn primary">Übernehmen</button>
-              <button id="calCancel" class="btn">Abbrechen</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Standort-Overlay -->
-        <div id="siteOverlay" class="site-overlay" hidden>
-          <div class="cal-card">
-            <div class="cal-title" id="siteOverlayTitle">Standort</div>
-            <div class="cal-body">
-              <label for="siteId">ID (1–999)</label>
-              <input id="siteId" type="number" min="1" max="999" placeholder="z. B. 11" />
-              <label for="siteName" style="margin-top:8px;">Name (optional)</label>
-              <input id="siteName" type="text" placeholder="Halle / Bereich" />
-            </div>
-            <div class="cal-actions">
-              <button id="siteSave" class="btn primary">Speichern</button>
-              <button id="siteDelete" class="btn danger">Löschen</button>
-              <button id="siteCancel" class="btn">Abbrechen</button>
-            </div>
-          </div>
-        </div>
       </div>
+
       <div class="stepbar" id="stepBar" aria-live="polite"></div>
     </section>
 
-    <section class="panel data-panel" aria-label="Daten & Persistenz">
+    <!-- Daten -->
+    <section class="panel data-panel" aria-label="Daten">
       <div class="panel-header">
         <h2>Daten</h2>
         <div class="actions">
           <label class="btn file">
-            **Map‑Bundle laden**
-            <input id="fileMapBundle" class="file-input" type="file" accept=".json,application/json">
-          </label>
-          <label class="btn file">
             CSV Container
             <input id="fileContainers" class="file-input" type="file" accept=".csv,text/csv">
           </label>
-          <label class="btn file">
-            JSON Standorte
-            <input id="fileSitesJson" class="file-input" type="file" accept=".json,application/json">
-          </label>
-          <button id="exportSitesBtn" class="btn">Export Standorte</button>
-          <label class="btn file">
-            JSON Werksplan
-            <input id="filePlanJson" class="file-input" type="file" accept=".json,application/json">
-          </label>
-          <button id="exportPlanBtn" class="btn">Export Werksplan</button>
           <label class="btn file">
             JSON Einstellungen
             <input id="fileSettings" class="file-input" type="file" accept=".json,application/json">

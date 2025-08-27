@@ -1,4 +1,4 @@
-const SW_VERSION = 'bn-v1.4.1'; // Fix: computeKPIs statisch importiert
+const SW_VERSION = 'bn-v1.5.0'; // Map minimal: nur Start/Zoom + Bundle-Import
 
 const CORE = [
   'index.html',
@@ -18,7 +18,7 @@ const CORE = [
   'js/routing/nearest.js',
   'js/routing/dijkstra.js',
   'js/capacity/none.js',
-  'js/capacity/forklift_2p5t.js',
+  'js/capacity/forklift_2_5t.js', /* falls vorhanden; sonst ignoriert der Cache */
   'manifest.webmanifest',
   'assets/icon-192.png',
   'assets/icon-512.png'

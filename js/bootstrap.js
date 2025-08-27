@@ -14,38 +14,29 @@ async function bootstrap(){
     const { bus } = await import('./bus.js');
     const { initPreflight } = await import('./preflight.js');
     const uiMod  = await import('./ui.js');
-    const mapMod = await import('./map.js');
 
     dataMod.initFromLocalStorage();
     await uiMod.initUI();
     initPreflight(PF);
 
+    // Map: nur Start & Zoom
+    const mapMod = await import('./map.js');
+    const pick = (name) => mapMod[name] || (mapMod.default && mapMod.default[name]);
+
+    const initMap = pick('initMap');
+    if (typeof initMap !== 'function') {
+      throw new Error('map.initMap nicht verfügbar (veralteter Cache?). Bitte Seite zweimal neu laden.');
+    }
+
     const canvas = document.getElementById('mapCanvas');
-    mapMod.initMap(canvas);
+    initMap(canvas);
 
-    // Plan laden (optional)
-    const planInput = document.getElementById('planFile');
-    if (planInput){
-      planInput.addEventListener('change', (e)=>{
-        const f = e.target.files && e.target.files[0];
-        if (f) mapMod.loadPlanFromFile(f);
-      });
-    }
-
-    // Aktionen
-    document.getElementById('btnCalibrate').addEventListener('click', ()=>mapMod.setModeCalibrate());
-    document.getElementById('btnAddSite').addEventListener('click', ()=>mapMod.setModeAddSite());
-    document.getElementById('btnWalls').addEventListener('click', ()=>mapMod.setModeWalls());
-    document.getElementById('btnZone').addEventListener('click', ()=>mapMod.setModeZone());
-    document.getElementById('btnDoor').addEventListener('click', ()=>mapMod.setModeDoor());
-    document.getElementById('btnSetStart').addEventListener('click', ()=>mapMod.setModeStart());
-    document.getElementById('btnZoomIn').addEventListener('click', ()=>mapMod.zoomIn());
-    document.getElementById('btnZoomOut').addEventListener('click', ()=>mapMod.zoomOut());
-    document.getElementById('btnZoomReset').addEventListener('click', ()=>mapMod.zoomReset());
-
-    if (!dataMod.state.start && dataMod.state.sites.length){
-      dataMod.setStartPointFromSite(dataMod.state.sites[0].id);
-    }
+    // Buttons
+    const bind = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
+    bind('btnSetStart', ()=>pick('setModeStart') && pick('setModeStart')());
+    bind('btnZoomIn',   ()=>pick('zoomIn') && pick('zoomIn')());
+    bind('btnZoomOut',  ()=>pick('zoomOut') && pick('zoomOut')());
+    bind('btnZoomReset',()=>pick('zoomReset') && pick('zoomReset')());
 
     // PWA-Install
     let deferredPrompt = null;
@@ -79,8 +70,8 @@ async function bootstrap(){
     bus.emit('settings:updated', {obj: dataMod.state.settings});
   }catch(err){
     console.error(err);
-    panic('Kritischer Ladefehler. Seite neu laden oder Cache leeren.');
-    if (PF){ try{ const { initPreflight } = await import('./preflight.js'); initPreflight(true); }catch(_){} }
+    panic('Kritischer Ladefehler. Seite neu laden (ggf. 2×) oder Cache leeren.');
+    try{ const { initPreflight } = await import('./preflight.js'); initPreflight(true); }catch(_){}
     throw err;
   }
 }

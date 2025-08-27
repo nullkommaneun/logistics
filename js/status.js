@@ -25,34 +25,37 @@ function onAny(evt){
   render(evaluate());
 }
 
+function hasGrid(){
+  try{
+    const raw = localStorage.getItem('bn_navgrid'); if (!raw) return false;
+    const o = JSON.parse(raw);
+    return !!o && (Array.isArray(o.walls) || Array.isArray(o.blocked) || Array.isArray(o.zones));
+  }catch{ return false; }
+}
+
 function evaluate(){
   const msgs = [];
 
   if (volatileMsg && volatileMsg.text) { msgs.push({type:'error', text: volatileMsg.text}); }
 
-  if (!state.mapImage){
-    msgs.push({type:'error', text:'Noch kein Werksplanbild geladen. **Optional:** Tippe „Plan laden“, um eine Grafik zu hinterlegen. Für die Wegberechnung reicht das **Raster** mit Wänden/Toren.'});
+  if (!hasGrid()){
+    msgs.push({type:'error', text:'Noch **keine Karte** geladen. Tippe **„Map‑Bundle laden“** und wähle die Datei aus dem Editor.'});
   }
   if (!state.settings?.px_per_meter){
-    msgs.push({type:'error', text:'Kalibrierung fehlt. Tippe **„Kalibrieren“**, markiere **zwei Punkte** und gib die Distanz in **Metern** ein.'});
+    msgs.push({type:'error', text:'**Kalibrierung fehlt**. Bitte im **Editor** kalibrieren und das Bundle erneut exportieren.'});
   }
   if (!state.sites?.length){
-    msgs.push({type:'error', text:'Auf dem Plan sind noch **keine Standorte** gesetzt. Tippe **„Standort+“** und setze die Punkte dort, wo die Behälter stehen.'});
+    msgs.push({type:'error', text:'Im Bundle sind **keine Standorte** enthalten. Bitte den Editor verwenden, um Standorte zu setzen.'});
   }
   if (!state.start){
-    msgs.push({type:'error', text:'Startpunkt fehlt. Tippe **„Startpunkt“** und markiere deinen Start im Plan.'});
+    msgs.push({type:'error', text:'**Startpunkt fehlt**. Tippe **„Startpunkt“** und markiere deinen Start im Plan.'});
   }
   if (!state.containers?.length){
     msgs.push({type:'error', text:'Es sind noch **keine Behälterdaten** geladen. Lade die Container‑CSV unter **Daten → CSV Container**.'});
   }
 
-  // Import-Warnungen (Container)
   for (const w of (state.warnings?.containers||[])){
-    if (String(w).includes('Semikolon')) {
-      msgs.push({type:'error', text:'Die Container‑Datei wirkt mit **Semikolons** exportiert. Besser: **Komma** als Trennzeichen.'});
-    } else {
-      msgs.push({type:'error', text:String(w)});
-    }
+    msgs.push({type:'error', text:String(w)});
   }
 
   return msgs;

@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0f14">
+  <title>Behälter‑Navigator</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/icon-192.png" sizes="192x192">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="theme-dark density-comfort">
+  <header class="appbar">
+    <h1>Behälter‑Navigator</h1>
+    <div class="status" id="installStatus" aria-live="polite"></div>
+  </header>
+
+  <main id="main" class="layout">
+    <section class="panel search-panel" aria-label="Suche und Eingabe">
+      <label for="searchInput" class="visually-hidden">Behälter‑Nr. eingeben (6-stellig)</label>
+      <input id="searchInput" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="6"
+             autocomplete="off" placeholder="Behälter‑Nr. (6-stellig)" aria-label="Behälternummer"/>
+      <button id="addBtn" class="btn primary" aria-label="zur Tour hinzufügen">Hinzufügen</button>
+      <div id="acList" class="autocomplete" role="listbox" aria-label="Vorschläge"></div>
+      <div id="statusArea" class="status-area" aria-live="polite"></div>
+      <p class="hint">Serieneingabe: <kbd>Enter</kbd> fügt hinzu. <strong>Nicht während der Fahrt bedienen.</strong></p>
+    </section>
+
+    <section class="panel cart-panel" aria-label="Tourliste">
+      <div class="panel-header">
+        <h2>Tourliste</h2>
+        <div class="actions">
+          <button id="clearCartBtn" class="btn">Leeren</button>
+          <button id="exportTourBtn" class="btn">Tour‑CSV</button>
+        </div>
+      </div>
+      <ul id="cartList" class="list"></ul>
+      <div id="kpiBar" class="kpis" aria-live="polite"></div>
+    </section>
+
+    <section class="panel map-panel" aria-label="Karte & Wegeplan">
+      <div class="panel-header">
+        <h2>Karte</h2>
+        <div class="actions">
+          <label class="btn file">
+            Plan laden
+            <input type="file" id="planFile" accept="image/*" class="file-input" aria-label="Werksplan-Bild (optional)">
+          </label>
+          <button id="btnCalibrate" class="btn">Kalibrieren</button>
+          <button id="btnAddSite" class="btn">Standort+</button>
+          <button id="btnWalls" class="btn">Wände</button>
+          <button id="btnZone" class="btn">Sperrzone</button>
+          <button id="btnDoor" class="btn">Tor (Öffnung)</button>
+          <button id="btnSetStart" class="btn">Startpunkt</button>
+          <button id="btnZoomIn" class="btn">Zoom&nbsp;+</button>
+          <button id="btnZoomOut" class="btn">Zoom&nbsp;−</button>
+          <button id="btnZoomReset" class="btn">1:1</button>
+        </div>
+      </div>
+      <div class="canvas-wrap">
+        <canvas id="mapCanvas" width="1000" height="700" aria-label="Werksplan"></canvas>
+
+        <!-- Kalibrierung -->
+        <div id="calOverlay" class="cal-overlay" hidden>
+          <div class="cal-card">
+            <div class="cal-title">Kalibrierung</div>
+            <div class="cal-body">
+              <p>Distanz zwischen den zwei gewählten Punkten in Metern eingeben:</p>
+              <input id="calMeters" type="number" min="0" step="0.1" placeholder="Meter" />
+            </div>
+            <div class="cal-actions">
+              <button id="calOk" class="btn primary">Übernehmen</button>
+              <button id="calCancel" class="btn">Abbrechen</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Standort-Overlay -->
+        <div id="siteOverlay" class="site-overlay" hidden>
+          <div class="cal-card">
+            <div class="cal-title" id="siteOverlayTitle">Standort</div>
+            <div class="cal-body">
+              <label for="siteId">ID (1–999)</label>
+              <input id="siteId" type="number" min="1" max="999" placeholder="z. B. 11" />
+              <label for="siteName" style="margin-top:8px;">Name (optional)</label>
+              <input id="siteName" type="text" placeholder="Halle / Bereich" />
+            </div>
+            <div class="cal-actions">
+              <button id="siteSave" class="btn primary">Speichern</button>
+              <button id="siteDelete" class="btn danger">Löschen</button>
+              <button id="siteCancel" class="btn">Abbrechen</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="stepbar" id="stepBar" aria-live="polite"></div>
+    </section>
+
+    <section class="panel data-panel" aria-label="Daten & Persistenz">
+      <div class="panel-header">
+        <h2>Daten</h2>
+        <div class="actions">
+          <label class="btn file">
+            **Map‑Bundle laden**
+            <input id="fileMapBundle" class="file-input" type="file" accept=".json,application/json">
+          </label>
+          <label class="btn file">
+            CSV Container
+            <input id="fileContainers" class="file-input" type="file" accept=".csv,text/csv">
+          </label>
+          <label class="btn file">
+            JSON Standorte
+            <input id="fileSitesJson" class="file-input" type="file" accept=".json,application/json">
+          </label>
+          <button id="exportSitesBtn" class="btn">Export Standorte</button>
+          <label class="btn file">
+            JSON Werksplan
+            <input id="filePlanJson" class="file-input" type="file" accept=".json,application/json">
+          </label>
+          <button id="exportPlanBtn" class="btn">Export Werksplan</button>
+          <label class="btn file">
+            JSON Einstellungen
+            <input id="fileSettings" class="file-input" type="file" accept=".json,application/json">
+          </label>
+          <button id="exportAllBtn" class="btn">Export JSON</button>
+          <button id="resetBtn" class="btn danger">Zurücksetzen</button>
+        </div>
+      </div>
+      <div class="data-summaries">
+        <div><strong>Container:</strong> <span id="sumContainers">–</span></div>
+        <div><strong>Standorte:</strong> <span id="sumSites">–</span></div>
+        <div><strong>Schema:</strong> <span id="sumSchema">–</span></div>
+        <div><strong>Kalibrierung:</strong> <span id="sumCal">unkalibriert</span></div>
+        <div><strong>Startpunkt:</strong> <span id="sumStart">nicht gesetzt</span></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="bottombar">
+    <div class="left">
+      <button id="installBtn" class="btn secondary">Auf Gerät installieren</button>
+    </div>
+    <div class="right">
+      <span id="etaTotal" class="eta">ETA: –</span>
+      <span id="distTotal" class="dist">Distanz: –</span>
+    </div>
+  </footer>
+
+  <div id="snackbar" class="snackbar" role="status" aria-live="polite"></div>
+
+  <script type="module" src="js/bootstrap.js"></script>
+</body>
+</html>
